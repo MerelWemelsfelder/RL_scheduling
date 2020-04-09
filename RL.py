@@ -41,7 +41,7 @@ class Resource(object):
     def __init__(self, i, g_v, policy_init):
         self.i = i                                      # index of r_i
         self.units = [Unit(i, q) for q in range(g_v)]   # units in resource
-        self.policy = policy_init                      # initialize Q-table with zeros
+        self.policy = policy_init.copy()                # initialize Q-table with zeros
         
     def reset(self, waiting):
         self.units = [unit.reset(waiting) for unit in self.units]
@@ -171,7 +171,7 @@ class MDP(object):
                     if state_action == "act":
                         j = a_indices[np.argmax(resource.policy[a_indices])]
                     job = self.actions[j]
-                    
+
                 resource.last_action = job
                                 
                 if job != "None":
