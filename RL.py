@@ -4,12 +4,44 @@ from itertools import chain, combinations
 from settings import *
 from main import *
 
+def update_policy_Q(resources, states, actions):
+    for resource in resources:
+        resource.state = resource.units[0].state.copy()     # update resource state
+        resource.score += resource.reward                   # update resource score
+        
+        if resource.last_action != None:
+            s1 = states.index(resource.state)          # current state
+            s0 = states.index(resource.prev_state)     # previous state
+            a = actions.index(resource.last_action)    # taken action
+
+            if state_action == "st_act":
+                next_max = np.max(resource.policy[s1])    # max q-value of current state
+                q_old = resource.policy[s0, a]
+                q_new = (1 - alpha) * q_old + alpha * (resource.reward + gamma * next_max)
+                resource.policy[s0, a] = q_new
+            if state_action == "act":
+                next_max = resource.policy[a]             # q-value of current state
+                q_old = resource.policy[a]
+                q_new = (1 - alpha) * q_old + alpha * (resource.reward + gamma * next_max)
+                resource.policy[a] = q_new
+
+    return resources
+
+def update_history(resources, time):
+    for resource in resources:
+        resource.state = resource.units[0].state.copy()     # update resource state
+        resource.score += resource.reward                   # update resource score
+
+        resource.h[time] = (resource.prev_state, resource.last_action)
+
+    return resources
+
 # RESOURCE
 class Resource(object):
     def __init__(self, i, g_v, policy_init):
         self.i = i                                      # index of r_i
         self.units = [Unit(i, q) for q in range(g_v)]   # units in resource
-        self.q_table = policy_init                      # initialize Q-table with zeros
+        self.policy = policy_init                      # initialize Q-table with zeros
         
     def reset(self, waiting):
         self.units = [unit.reset(waiting) for unit in self.units]
@@ -21,6 +53,7 @@ class Resource(object):
         self.last_action = None     # action that was executed most recently
         
         self.schedule = []          # stores tuples (job, starting time) for this resource
+        self.h = dict()
         
         return self
 
@@ -50,9 +83,9 @@ class Job(object):
         self.D = random.sample(list(range(10,30)), 1)[0]    # due date
         
     def reset(self):
-        self.done = False        # whether all processing is completed
-        self.t = None            # time start processing
-        self.c = None            # time completion processing
+        self.done = False       # whether all processing is completed
+        self.t = None           # time start processing
+        self.c = None           # time completion processing
         
         return self
 
@@ -130,10 +163,13 @@ class MDP(object):
                 if random.uniform(0, 1) < epsilon:
                     job = random.sample(actions, 1)[0]          # explore
                 else:
-                    s = self.states.index(waiting)
-                    a = [job.j for job in waiting]
-                    a.append(n)
-                    j = a[np.argmax(resource.q_table[s, a])]    # exploit
+                    s_index = self.states.index(waiting)
+                    a_indices = [job.j for job in waiting]
+                    a_indices.append(n)
+                    if state_action == "st_act":
+                        j = a_indices[np.argmax(resource.policy[s_index, a_indices])]       # exploit
+                    if state_action == "act":
+                        j = a_indices[np.argmax(resource.policy[a_indices])]
                     job = self.actions[j]
                     
                 resource.last_action = job
@@ -144,28 +180,16 @@ class MDP(object):
                     job.t = time                            # set starting time job
                     duration = delta[unit.i][job.j][unit.q][1]
                     unit.c = time + duration                # set completion time on unit
-                    
                     resource.schedule.append((job.j,time))  # add to schedule
             else:
                 resource.last_action = None
                     
-        for resource in self.resources:
-            resource.state = resource.units[0].state.copy()     # update resource state
-            resource.score += resource.reward                   # update resource score
-            
-            if resource.last_action != None:
-                s1 = self.states.index(resource.state)          # current state
-                s0 = self.states.index(resource.prev_state)     # previous state
-                a = self.actions.index(resource.last_action)    # taken action
-                next_max = np.max(resource.q_table[s1])         # max q-value of current state
-
-                # update Q-value of previous state, for the taken action
-                q_old = resource.q_table[s0, a]
-                q_new = (1 - alpha) * q_old + alpha * (resource.reward + gamma * next_max)
-                resource.q_table[s0, a] = q_new
+        if method == "Q_learning":
+            self.resources = update_policy_Q(self.resources, self.states, self.actions)
+        if method == "JEPS":
+            self.resources = update_history(self.resources, time)
             
         return self, False
-
 
 
 
