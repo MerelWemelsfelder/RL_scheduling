@@ -1,8 +1,7 @@
-import numpy as np
-import random
+import numpy as npf
+import random, time
 from itertools import chain, combinations
 from RL import *
-from settings import *
 
 def powerset(iterable):
     return chain.from_iterable(combinations(iterable, r) for r in range(len(iterable)+1))
@@ -90,9 +89,9 @@ def calculate_reward(RL):
     return Cmax
 
 def update_policy_JEPS(resource, states, actions, r_best, time_max, GAMMA):
-    for time in range(time_max-1):
-        s = resource.h[time][0]
-        a = resource.h[time][1]
+    for z in range(time_max-1):
+        s = resource.h[z][0]
+        a = resource.h[z][1]
         if a != None:
             s_index = states.index(s)     # previous state
             a_index = actions.index(a)    # taken action
@@ -115,56 +114,80 @@ def make_schedule(RL):
         schedule[resource.i] = resource.schedule
     return schedule
 
-def main():
-    print("Creating delta table and Q-learning heuristics")
-    delta, heur_job = gen_delta(LV, GV, N)
-    heur_res = heuristic_best_resource(heur_job)
-    heur_order = heuristic_order(delta, LV, GV, N)
-
-    print("")
-    if STACT == "st_act":                # st_act for state-action pairs, act for only actions
+def find_schedule(M, LV, GV, N, delta, ALPHA, GAMMA, EPSILON, heur_job, heur_res, heur_order, EPOCHS, METHOD, STACT):
+    if STACT == "st_act":                       # st_act for state-action pairs, act for only actions
         policy_init = np.zeros([2**N, N+1])     # states, actions
-    else:                                       # st_act for state-action pairs, act for only actions
+    if STACT == "act":                          # st_act for state-action pairs, act for only actions
         policy_init = np.zeros([N+1])           # actions
 
     RL = MDP(LV, GV, N, policy_init)          # initialize MDP
     r_best = 99999
     best_schedule = dict()
+    timer_start = time.time()
     for epoch in range(EPOCHS):
-        if epoch % 100 == 0:
-            print(f"Epoch: {epoch}")
 
         DONE = False
-        time = 0
+        z = 0
         RL.reset()
         
         # take timesteps until processing of all jobs is finished
         while not DONE:
-            RL, DONE = RL.step(time, GV, N, delta, ALPHA, GAMMA, EPSILON, heur_job, heur_res, heur_order)
-            time += 1
+            RL, DONE = RL.step(z, GV, N, delta, ALPHA, GAMMA, EPSILON, STACT, heur_job, heur_res, heur_order)
+            z += 1
 
         r = calculate_reward(RL)
         if r < r_best:
             r_best = r
             best_schedule = make_schedule(RL)
-            # print("changed")
             if METHOD == "JEPS":
                 resources = RL.resources
                 states = RL.states
                 actions = RL.actions
 
                 for i in range(len(resources)):
-                    resource = update_policy_JEPS(resources[i], states, actions, r_best, time, GAMMA)
+                    resource = update_policy_JEPS(resources[i], states, actions, r_best, z, GAMMA)
                     RL.resources[i] = resource
 
-    print("\nBEST SCHEDULE")
-    print(best_schedule)
-    print("makespan = "+str(r_best))
+    timer_finish = time.time()
+    calc_time = timer_finish - timer_start
+    return best_schedule, r_best, calc_time, RL
 
-    print("POLICIES:")
-    for resource in RL.resources:
-        print("resource "+str(resource.i)+":")
-        print(resource.policy)
+def write_log(OUTPUT_DIR, METHOD, STACT, N, LV, GV, makespan, calc_time):
+    file = open(OUTPUT_DIR+"log.csv",'a')
+    file.write("\n"+METHOD+","+STACT+","+str(N)+","+str(LV)+","+str(GV)+","+str(makespan)+","+str(calc_time))    
+    file.close() 
+
+def main():
+    M = 1       # number of work stations
+
+    ALPHA = 0.2     # learning rate (0<α≤1): the extent to which Q-values are updated every timestep
+    GAMMA = 0.6     # discount factor (0≤γ≤1): how much importance to give to future rewards (1 = long term, 0 = greedy)   
+    EPSILON = 0.2   # probability of choosing a random action (= exploring)
+
+    EPOCHS = 1000       # set number of epochs to train RL model
+    OUTPUT_DIR = '../output/'
+
+    file = open(OUTPUT_DIR+"log.csv",'a')
+    file.write("METHOD,STACT,N,LV,GV,MAKESPAN,TIME")
+    file.close() 
+
+    print("START TESTING")
+    for LV in range(1,10):                  # number of resources
+        for GV in range(1,5):               # number of units per resource
+            for N in range(1,100):          # number of jobs
+                print("Creating delta table and Q-learning heuristics")
+                delta, heur_job = gen_delta(LV, GV, N)
+                heur_res = heuristic_best_resource(heur_job)
+                heur_order = heuristic_order(delta, LV, GV, N)
+
+                for METHOD in ["Q_learning", "JEPS"]:
+                    for STACT in ["act", "st_act"]:
+
+                        print(str(N)+" jobs, "+str(LV)+" resources with "+str(GV)+" units")
+                        print("method: "+METHOD+", policy shape: "+STACT)
+
+                        schedule, makespan, calc_time, RL = find_schedule(M, LV, GV, N, delta, ALPHA, GAMMA, EPSILON, heur_job, heur_res, heur_order, EPOCHS, METHOD, STACT)
+                        write_log(OUTPUT_DIR, METHOD, STACT, N, LV, GV, makespan, calc_time)
 
 if __name__ == '__main__':
     main()
