@@ -7,7 +7,6 @@ from main import *
 def update_policy_Q(resources, states, actions):
     for resource in resources:
         resource.state = resource.units[0].state.copy()     # update resource state
-        resource.score += resource.reward                   # update resource score
         
         if resource.last_action != None:
             s1 = states.index(resource.state)          # current state
@@ -25,12 +24,13 @@ def update_policy_Q(resources, states, actions):
                 q_new = (1 - alpha) * q_old + alpha * (resource.reward + gamma * next_max)
                 resource.policy[a] = q_new
 
+        resource.reward = 0     # reset reward
+
     return resources
 
 def update_history(resources, time):
     for resource in resources:
         resource.state = resource.units[0].state.copy()     # update resource state
-        resource.score += resource.reward                   # update resource score
 
         resource.h[time] = (resource.prev_state, resource.last_action)
 
@@ -47,10 +47,10 @@ class Resource(object):
         self.units = [unit.reset(waiting) for unit in self.units]
         
         self.reward = 0             # counts rewards per timestep
-        self.score = 0              # counts rewards per epoch
         self.prev_state = None      # previous state
         self.state = waiting        # current state (= waiting jobs)
         self.last_action = None     # action that was executed most recently
+        self.last_job = None        # job that was processed most recently
         
         self.schedule = []          # stores tuples (job, starting time) for this resource
         self.h = dict()
@@ -95,7 +95,7 @@ class MDP(object):
     def __init__(self, l_v, g_v, n, policy_init):
         self.jobs = [Job(j) for j in range(n)]
         self.actions = self.jobs.copy()
-        self.actions.append("None")
+        self.actions.append("do_nothing")
         self.states = [list(state) for state in list(powerset(self.jobs))]
         self.resources = [Resource(i, g_v, policy_init) for i in range(l_v)]
         
@@ -109,10 +109,10 @@ class MDP(object):
         self.DONE = False
 
     # TAKE A TIMESTEP
-    def step(self, time, g_v, n, delta, alpha, gamma, epsilon):
+    def step(self, time, g_v, n, delta, alpha, gamma, epsilon, heur_job, heur_res, heur_order):
         
         for resource in self.resources:
-            resource.reward = -1                            # timestep penalty
+            resource.reward -= 1                            # timestep penalty
             resource.prev_state = resource.state.copy()     # update previous state
             
             # REACHED COMPLETION TIMES
@@ -121,7 +121,6 @@ class MDP(object):
                 if unit.c == time:
                     job = unit.processing           # remember what job it was processing
                     unit.processing = None          # set unit to idle
-                    resource.reward += 1            # give reward for finished processing step
                     
                     if q < (g_v-1):                 # if this is not the last 
                         nxt = resource.units[q+1]   # next unit in the resource
@@ -145,7 +144,7 @@ class MDP(object):
                     if unit.processing == None:     # check if unit is currently idle
                         job = unit.state.pop(0)     # pick first waiting job
                         unit.processing = job       # set unit to processing selected job
-                        duration = delta[resource.i][job.j][unit.q][1]
+                        duration = delta[resource.i][job.j][unit.q]
                         unit.c = time + duration    # set completion time
                         
         # START PROCESSING OF NEW JOBS
@@ -156,12 +155,12 @@ class MDP(object):
             if unit.processing == None:
                 waiting = unit.state.copy()           # create action set
                 actions = waiting.copy()
-                actions.append("None")                # add option to do nothing
+                actions.append("do_nothing")          # add option to do nothing
                 
                 # choose random action with probability epsilon,
                 # otherwise choose action with highest Q-value
                 if random.uniform(0, 1) < epsilon:
-                    job = random.sample(actions, 1)[0]          # explore
+                    job = random.sample(actions, 1)[0]                                      # explore
                 else:
                     s_index = self.states.index(waiting)
                     a_indices = [job.j for job in waiting]
@@ -172,13 +171,28 @@ class MDP(object):
                         j = a_indices[np.argmax(resource.policy[a_indices])]
                     job = self.actions[j]
 
-                resource.last_action = job
-                                
-                if job != "None":
+                resource.last_action = job                  # update last executed action
+                if job != "do_nothing":
+                    # give a reward for choosing the job with shortest processing time on resource i
+                    best_job = min(heur_job[resource.i], key=heur_job[resource.i].get)
+                    if job.j == best_job:
+                        resource.reward += 3
+
+                    # give a reward for choosing the job which has its shortest processing time on resource i
+                    best_resource = min(heur_res[job.j], key=heur_res[job.j].get)
+                    if resource.i == best_resource:
+                        resource.reward += 5
+
+                    if resource.last_job != None:
+                        # give negative reward for blocking due to scheduling order
+                        blocking = heur_order[resource.i][job.j][resource.last_job.j]
+                        resource.reward -= blocking
+
+                    resource.last_job = job                 # update last processed job
                     unit.state.remove(job)                  # remove job from all waiting lists
                     unit.processing = job                   # set unit to processing job
                     job.t = time                            # set starting time job
-                    duration = delta[unit.i][job.j][unit.q][1]
+                    duration = delta[unit.i][job.j][unit.q]
                     unit.c = time + duration                # set completion time on unit
                     resource.schedule.append((job.j,time))  # add to schedule
             else:

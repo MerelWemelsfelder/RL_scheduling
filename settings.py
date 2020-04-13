@@ -1,6 +1,6 @@
 m = 1		# number of work stations
 l_1 = 4		# number of resources in w_1
-g_1 = 2			# number of units per resource in w_1
+g_1 = 3		# number of units per resource in w_1
 n = 10		# number of jobs
 
 alpha = 0.2		# learning rate (0<α≤1): the extent to which Q-values are updated every timestep
@@ -9,5 +9,5 @@ epsilon = 0.2	# probability of choosing a random action (= exploring)
 
 n_epochs = 1000       # set number of epochs to train RL model
 
-method = "JEPS" 	# Q_learning / JEPS
+method = "Q_learning" 	# Q_learning / JEPS
 state_action = "act"	# st_act for state-action pairs, act for only actions

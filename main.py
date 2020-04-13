@@ -10,15 +10,65 @@ def powerset(iterable):
 # GENERATE RANDOM DURATIONS
 def gen_delta(l_1, g_1, n):
     delta = dict()
+    heur_job = dict()
+
     for i in range(l_1):
         r_dict = dict()
+        heur_j = dict()
+
         for j in range(n):
             ls = []
+            j_total = 0
             for q in range(g_1):
-                ls.append((q, random.sample(list(range(1,6)), 1)[0]))
+                d = random.sample(list(range(1,6)), 1)[0]
+                j_total += d
+                ls.append(d)
+
             r_dict[j] = ls
+            heur_j[j] = j_total
+
         delta[i] = r_dict
-    return delta
+        heur_job[i] = heur_j
+
+    # delta = resource: {job: [delta_0, delta_1, ..]}
+    return delta, heur_job
+
+def heuristic_best_resource(heur_j):
+    heur_r = dict()
+    for j in heur_j[0].keys():
+        heur_r[j] = dict()
+        for r in heur_j.keys():
+            heur_r[j][r] = heur_j[r][j]
+    return heur_r
+
+def heuristic_order(delta, l_1, g_1, n):
+    all_jobs = list(range(n))
+    heur_order = dict()             # key = resource i
+    for i in range(l_1):
+        r_dict = dict()             # key = job j
+        for j in range(n):
+            j_dict = dict()         # key = job o
+            other = all_jobs.copy()
+            other.remove(j)
+            for o in other:
+                counter = 0
+                spare = 0
+                for q in range(g_1-1):
+                    dj = delta[i][j][q+1]
+                    do = delta[i][o][q]
+                    blocking = dj-do
+                    if blocking < 0:
+                        spare += blocking
+                    if blocking > 0:
+                        if spare >= blocking:
+                            spare -= blocking
+                        else:
+                            blocking -= spare
+                            counter += blocking
+                j_dict[o] = counter
+            r_dict[j] = j_dict
+        heur_order[i] = r_dict
+    return heur_order
 
 def calculate_reward(RL):
     t_all = []
@@ -72,7 +122,9 @@ def make_schedule(RL):
     return schedule
 
 def main():
-    delta = gen_delta(l_1, g_1, n)
+    delta, heur_job = gen_delta(l_1, g_1, n)
+    heur_res = heuristic_best_resource(heur_job)
+    heur_order = heuristic_order(delta, l_1, g_1, n)
 
     if state_action == "st_act":                # st_act for state-action pairs, act for only actions
         policy_init = np.zeros([2**n, n+1])     # states, actions
@@ -92,7 +144,7 @@ def main():
         
         # take timesteps until processing of all jobs is finished
         while not DONE:
-            world, DONE = RL.step(time, g_1, n, delta, alpha, gamma, epsilon)
+            RL, DONE = RL.step(time, g_1, n, delta, alpha, gamma, epsilon, heur_job, heur_res, heur_order)
             time += 1
 
         r = calculate_reward(RL)
