@@ -114,7 +114,7 @@ class MDP(object):
         for resource in self.resources:
             resource.reward -= 1                            # timestep penalty
             resource.prev_state = resource.state.copy()     # update previous state
-            
+
             # REACHED COMPLETION TIMES
             for q in range(GV):
                 unit = resource.units[q]
@@ -127,7 +127,7 @@ class MDP(object):
                         nxt.state.append(job)       # add job to waiting list for next unit
                     else:
                         job.done = True             # set job to done
-                        job.c = z                # save completion time of job
+                        job.c = z                   # save completion time of job
 
         # CHECK WHETHER ALL JOBS ARE FINISHED
         if all([job.done for job in self.jobs]):
@@ -137,7 +137,7 @@ class MDP(object):
             
             return self, True
                         
-        # PRESUME OPERATIONS BETWEEN UNITS
+        # RESUME OPERATIONS BETWEEN UNITS
         for resource in self.resources:
             for unit in resource.units[1:]:         # for all units exept q=0
                 if len(unit.state) > 0:             # check if there is a waithing list
