@@ -160,10 +160,8 @@ class MDP(object):
                 # choose random action with probability EPSILON,
                 # otherwise choose action with highest Q-value
                 if random.uniform(0, 1) < EPSILON:
-                    print("EPSILON")
                     job = random.sample(actions, 1)[0]                                      # explore
                 else:
-                    print("HIGHEST")
                     s_index = self.states.index(waiting)
                     a_indices = [job.j for job in waiting]
                     a_indices.append(N)
@@ -193,7 +191,7 @@ class MDP(object):
                     resource.last_job = job                 # update last processed job
                     unit.state.remove(job)                  # remove job from all waiting lists
                     unit.processing = job                   # set unit to processing job
-                    job.t = z                               # set starting time job
+                    job.t = z 
                     duration = delta[job.j][unit.q][resource.i]
                     unit.c = z + duration                   # set completion time on unit
                     resource.schedule.append((job.j,z))     # add to schedule

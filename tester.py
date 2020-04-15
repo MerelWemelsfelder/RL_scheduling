@@ -3,7 +3,7 @@ import random, time
 from itertools import chain, combinations
 from RL import *
 import scipy.stats
-from get_delta import *
+from MILP import *
 
 def powerset(iterable):
     return chain.from_iterable(combinations(iterable, r) for r in range(len(iterable)+1))
@@ -22,6 +22,32 @@ def heuristic_best_job(tau, LV, GV, N):
 
     return heur_job
 
+# GENERATE RANDOM DURATIONS
+def gen_delta(LV, GV, N):
+    delta = dict()
+    heur_job = dict()
+
+    for i in range(LV):
+        r_dict = dict()
+        heur_j = dict()
+
+        for j in range(N):
+            ls = []
+            j_total = 0
+            for q in range(GV):
+                d = random.sample(list(range(1,6)), 1)[0]
+                j_total += d
+                ls.append(d)
+
+            r_dict[j] = ls
+            heur_j[j] = j_total
+
+        delta[i] = r_dict
+        heur_job[i] = heur_j
+
+    # delta = resource: {job: [delta_0, delta_1, ..]}
+    return delta, heur_job
+
 def heuristic_best_resource(heur_j):
     heur_r = dict()
     for j in heur_j[0].keys():
@@ -30,7 +56,8 @@ def heuristic_best_resource(heur_j):
             heur_r[j][r] = heur_j[r][j]
     return heur_r
 
-def heuristic_order(tau, LV, GV, N):
+def heuristic_order(delta, LV, GV, N):
+>>>>>>> 3f7605e5b9349f87c2e85bd8454de5b6da65638c
     all_jobs = list(range(N))
     heur_order = dict()             # key = resource i
     for i in range(LV):
@@ -43,8 +70,8 @@ def heuristic_order(tau, LV, GV, N):
                 counter = 0
                 spare = 0
                 for q in range(GV-1):
-                    dj = tau[j][q+1][i]
-                    do = tau[o][q][i]
+                    dj = delta[i][j][q+1]
+                    do = delta[i][o][q]
                     blocking = dj-do
                     if blocking < 0:
                         spare += blocking
@@ -133,6 +160,7 @@ def find_schedule(M, LV, GV, N, delta, ALPHA, GAMMA, EPSILON, heur_job, heur_res
             r_best = r
             best_schedule = make_schedule(RL)
             epoch_best_found = epoch
+
             if METHOD == "JEPS":
                 resources = RL.resources
                 states = RL.states
@@ -172,7 +200,9 @@ def main():
     file.close() 
 
     print("START TESTING")
-
+    # for LV in range(1,10):                  # number of resources
+    #     for GV in range(1,5):               # number of units per resource
+    #         for N in range(1,100):          # number of jobs
     ins = MILP_instance(1, LV, GV, N)
     # best_schedule, best_makespan = MILP_solve(M, LV, GV, N)
     delta = ins.lAreaInstances[0].tau
@@ -181,6 +211,10 @@ def main():
     heur_job = heuristic_best_job(delta, LV, GV, N)
     heur_res = heuristic_best_resource(heur_job)
     heur_order = heuristic_order(delta, LV, GV, N)
+
+
+    schedule, makespan, calc_time, RL = find_schedule(M, LV, GV, N, delta, ALPHA, GAMMA, EPSILON, heur_job, heur_res, heur_order, EPOCHS, METHOD, STACT)
+    write_log(OUTPUT_DIR, METHOD, STACT, N, LV, GV, makespan, calc_time)
 
     # print(str(LV)+","+str(GV)+","+str(N)+","+str(EPSILON)+","+str(GAMMA))
 
