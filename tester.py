@@ -1,37 +1,26 @@
-import numpy as np
-import random
+import numpy as npf
+import random, time
 from itertools import chain, combinations
 from RL import *
-from settings import *
+import scipy.stats
+from get_delta import *
 
 def powerset(iterable):
     return chain.from_iterable(combinations(iterable, r) for r in range(len(iterable)+1))
 
-# GENERATE RANDOM DURATIONS
-def gen_delta(LV, GV, N):
-    delta = dict()
+def heuristic_best_job(tau, LV, GV, N):
     heur_job = dict()
 
     for i in range(LV):
-        r_dict = dict()
         heur_j = dict()
-
         for j in range(N):
-            ls = []
             j_total = 0
             for q in range(GV):
-                d = random.sample(list(range(1,6)), 1)[0]
-                j_total += d
-                ls.append(d)
-
-            r_dict[j] = ls
+                j_total += tau[j][q][i]
             heur_j[j] = j_total
-
-        delta[i] = r_dict
         heur_job[i] = heur_j
 
-    # delta = resource: {job: [delta_0, delta_1, ..]}
-    return delta, heur_job
+    return heur_job
 
 def heuristic_best_resource(heur_j):
     heur_r = dict()
@@ -41,7 +30,7 @@ def heuristic_best_resource(heur_j):
             heur_r[j][r] = heur_j[r][j]
     return heur_r
 
-def heuristic_order(delta, LV, GV, N):
+def heuristic_order(tau, LV, GV, N):
     all_jobs = list(range(N))
     heur_order = dict()             # key = resource i
     for i in range(LV):
@@ -54,8 +43,8 @@ def heuristic_order(delta, LV, GV, N):
                 counter = 0
                 spare = 0
                 for q in range(GV-1):
-                    dj = delta[i][j][q+1]
-                    do = delta[i][o][q]
+                    dj = tau[j][q+1][i]
+                    do = tau[o][q][i]
                     blocking = dj-do
                     if blocking < 0:
                         spare += blocking
@@ -90,9 +79,9 @@ def calculate_reward(RL):
     return Cmax
 
 def update_policy_JEPS(resource, states, actions, r_best, time_max, GAMMA):
-    for time in range(time_max-1):
-        s = resource.h[time][0]
-        a = resource.h[time][1]
+    for z in range(time_max-1):
+        s = resource.h[z][0]
+        a = resource.h[z][1]
         if a != None:
             s_index = states.index(s)     # previous state
             a_index = actions.index(a)    # taken action
@@ -115,56 +104,91 @@ def make_schedule(RL):
         schedule[resource.i] = resource.schedule
     return schedule
 
-def main():
-    print("Creating delta table and Q-learning heuristics")
-    delta, heur_job = gen_delta(LV, GV, N)
-    heur_res = heuristic_best_resource(heur_job)
-    heur_order = heuristic_order(delta, LV, GV, N)
-
-    print("")
-    if STACT == "st_act":                # st_act for state-action pairs, act for only actions
+def find_schedule(M, LV, GV, N, delta, ALPHA, GAMMA, EPSILON, heur_job, heur_res, heur_order, EPOCHS, METHOD, STACT):
+    if STACT == "st_act":                       # st_act for state-action pairs, act for only actions
         policy_init = np.zeros([2**N, N+1])     # states, actions
-    else:                                       # st_act for state-action pairs, act for only actions
+    if STACT == "act":                          # st_act for state-action pairs, act for only actions
         policy_init = np.zeros([N+1])           # actions
 
-    RL = MDP(LV, GV, N, policy_init)          # initialize MDP
+    RL = MDP(LV, GV, N, policy_init)            # initialize MDP
     r_best = 99999
     best_schedule = dict()
+    epoch_best_found = 0
+    timer_start = time.time()
     for epoch in range(EPOCHS):
-        if epoch % 100 == 0:
-            print(f"Epoch: {epoch}")
+        # if epoch%100==0:
+        print(epoch)
 
         DONE = False
-        time = 0
+        z = 0
         RL.reset()
         
         # take timesteps until processing of all jobs is finished
         while not DONE:
-            RL, DONE = RL.step(time, GV, N, delta, ALPHA, GAMMA, EPSILON, heur_job, heur_res, heur_order)
-            time += 1
+            RL, DONE = RL.step(z, GV, N, delta, ALPHA, GAMMA, EPSILON, STACT, heur_job, heur_res, heur_order)
+            z += 1
 
         r = calculate_reward(RL)
         if r < r_best:
             r_best = r
             best_schedule = make_schedule(RL)
-            # print("changed")
+            epoch_best_found = epoch
             if METHOD == "JEPS":
                 resources = RL.resources
                 states = RL.states
                 actions = RL.actions
 
                 for i in range(len(resources)):
-                    resource = update_policy_JEPS(resources[i], states, actions, r_best, time, GAMMA)
+                    resource = update_policy_JEPS(resources[i], states, actions, r_best, z, GAMMA)
                     RL.resources[i] = resource
 
-    print("\nBEST SCHEDULE")
-    print(best_schedule)
-    print("makespan = "+str(r_best))
+    timer_finish = time.time()
+    calc_time = timer_finish - timer_start
+    return r_best, best_schedule, epoch_best_found, calc_time, RL
 
-    print("POLICIES:")
-    for resource in RL.resources:
-        print("resource "+str(resource.i)+":")
-        print(resource.policy)
+def write_log(OUTPUT_DIR, METHOD, STACT, N, LV, GV, EPOCHS, ALPHA, GAMMA, EPSILON, makespan, calc_time, epoch):
+    file = open(OUTPUT_DIR+"log.csv",'a')
+    file.write("\n"+METHOD+","+STACT+","+str(N)+","+str(LV)+","+str(GV)+","+str(EPOCHS)+","+str(ALPHA)+","+str(GAMMA)+","+str(EPSILON)+","+str(makespan)+","+str(calc_time)+","+str(epoch))    
+    file.close() 
+
+def main():
+    M = 1       # number of work stations
+    LV = 4      # number of resources
+    GV = 2      # number of units per resource
+    N = 10      # number of jobs
+
+    ALPHA = 0.2     # learning rate (0<α≤1): the extent to which Q-values are updated every timestep
+    GAMMA = 0.7     # discount factor (0≤γ≤1): how much importance to give to future rewards (1 = long term, 0 = greedy)   
+    EPSILON = 0.2   # probability of choosing a random action (= exploring)
+
+    METHOD = "JEPS"
+    STACT = "act"
+
+    EPOCHS = 100       # set number of epochs to train RL model
+    OUTPUT_DIR = '../output/'
+
+    file = open(OUTPUT_DIR+"log.csv",'a')
+    file.write("METHOD,STACT,N,LV,GV,EPOCHS,ALPHA,GAMMA,EPSILON,MAKESPAN,TIME,EPOCH_BEST")
+    file.close() 
+
+    print("START TESTING")
+
+    ins = MILP_instance(1, LV, GV, N)
+    # best_schedule, best_makespan = MILP_solve(M, LV, GV, N)
+    delta = ins.lAreaInstances[0].tau
+    print(delta)
+
+    heur_job = heuristic_best_job(delta, LV, GV, N)
+    heur_res = heuristic_best_resource(heur_job)
+    heur_order = heuristic_order(delta, LV, GV, N)
+
+    # print(str(LV)+","+str(GV)+","+str(N)+","+str(EPSILON)+","+str(GAMMA))
+
+    makespan, schedule, epoch, calc_time, RL = find_schedule(M, LV, GV, N, delta, ALPHA, GAMMA, EPSILON, heur_job, heur_res, heur_order, EPOCHS, METHOD, STACT)
+    print(schedule)
+    print(makespan)
+    print(calc_time)
+    # write_log(OUTPUT_DIR, METHOD, STACT, N, LV, GV, EPOCHS, ALPHA, GAMMA, EPSILON, makespan, calc_time, epoch)
 
 if __name__ == '__main__':
     main()

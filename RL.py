@@ -2,9 +2,9 @@ import numpy as np
 import random
 from itertools import chain, combinations
 from settings import *
-from main import *
+from tester import *
 
-def update_policy_Q(resources, states, actions):
+def update_policy_Q(resources, states, actions, STACT):
     for resource in resources:
         resource.state = resource.units[0].state.copy()     # update resource state
         
@@ -13,34 +13,34 @@ def update_policy_Q(resources, states, actions):
             s0 = states.index(resource.prev_state)     # previous state
             a = actions.index(resource.last_action)    # taken action
 
-            if state_action == "st_act":
+            if STACT == "st_act":
                 next_max = np.max(resource.policy[s1])    # max q-value of current state
                 q_old = resource.policy[s0, a]
-                q_new = (1 - alpha) * q_old + alpha * (resource.reward + gamma * next_max)
+                q_new = (1 - ALPHA) * q_old + ALPHA * (resource.reward + GAMMA * next_max)
                 resource.policy[s0, a] = q_new
-            if state_action == "act":
+            if STACT == "act":
                 next_max = resource.policy[a]             # q-value of current state
                 q_old = resource.policy[a]
-                q_new = (1 - alpha) * q_old + alpha * (resource.reward + gamma * next_max)
+                q_new = (1 - ALPHA) * q_old + ALPHA * (resource.reward + GAMMA * next_max)
                 resource.policy[a] = q_new
 
         resource.reward = 0     # reset reward
 
     return resources
 
-def update_history(resources, time):
+def update_history(resources, z):
     for resource in resources:
         resource.state = resource.units[0].state.copy()     # update resource state
 
-        resource.h[time] = (resource.prev_state, resource.last_action)
+        resource.h[z] = (resource.prev_state, resource.last_action)
 
     return resources
 
 # RESOURCE
 class Resource(object):
-    def __init__(self, i, g_v, policy_init):
+    def __init__(self, i, GV, policy_init):
         self.i = i                                      # index of r_i
-        self.units = [Unit(i, q) for q in range(g_v)]   # units in resource
+        self.units = [Unit(i, q) for q in range(GV)]   # units in resource
         self.policy = policy_init.copy()                # initialize Q-table with zeros
         
     def reset(self, waiting):
@@ -92,12 +92,12 @@ class Job(object):
 # MDP
 class MDP(object):
     # INITIALIZE MDP ENVIRONMENT
-    def __init__(self, l_v, g_v, n, policy_init):
-        self.jobs = [Job(j) for j in range(n)]
+    def __init__(self, LV, GV, N, policy_init):
+        self.jobs = [Job(j) for j in range(N)]
         self.actions = self.jobs.copy()
         self.actions.append("do_nothing")
         self.states = [list(state) for state in list(powerset(self.jobs))]
-        self.resources = [Resource(i, g_v, policy_init) for i in range(l_v)]
+        self.resources = [Resource(i, GV, policy_init) for i in range(LV)]
         
     # RESET MDP ENVIRONMENT
     def reset(self):
@@ -109,26 +109,26 @@ class MDP(object):
         self.DONE = False
 
     # TAKE A TIMESTEP
-    def step(self, time, g_v, n, delta, alpha, gamma, epsilon, heur_job, heur_res, heur_order):
-        
+    def step(self, z, GV, N, delta, ALPHA, GAMMA, EPSILON, STACT, heur_job, heur_res, heur_order):
+
         for resource in self.resources:
             resource.reward -= 1                            # timestep penalty
             resource.prev_state = resource.state.copy()     # update previous state
             
             # REACHED COMPLETION TIMES
-            for q in range(g_v):
+            for q in range(GV):
                 unit = resource.units[q]
-                if unit.c == time:
+                if unit.c == z:
                     job = unit.processing           # remember what job it was processing
                     unit.processing = None          # set unit to idle
                     
-                    if q < (g_v-1):                 # if this is not the last 
+                    if q < (GV-1):                 # if this is not the last 
                         nxt = resource.units[q+1]   # next unit in the resource
                         nxt.state.append(job)       # add job to waiting list for next unit
                     else:
                         job.done = True             # set job to done
-                        job.c = time                # save completion time of job
-                        
+                        job.c = z                # save completion time of job
+
         # CHECK WHETHER ALL JOBS ARE FINISHED
         if all([job.done for job in self.jobs]):
             start = min([job.t for job in self.jobs])
@@ -144,8 +144,8 @@ class MDP(object):
                     if unit.processing == None:     # check if unit is currently idle
                         job = unit.state.pop(0)     # pick first waiting job
                         unit.processing = job       # set unit to processing selected job
-                        duration = delta[resource.i][job.j][unit.q]
-                        unit.c = time + duration    # set completion time
+                        duration = delta[job.j][unit.q][resource.i]
+                        unit.c = z + duration       # set completion time
                         
         # START PROCESSING OF NEW JOBS
         first_units = set([resource.units[0] for resource in self.resources])
@@ -157,17 +157,19 @@ class MDP(object):
                 actions = waiting.copy()
                 actions.append("do_nothing")          # add option to do nothing
                 
-                # choose random action with probability epsilon,
+                # choose random action with probability EPSILON,
                 # otherwise choose action with highest Q-value
-                if random.uniform(0, 1) < epsilon:
+                if random.uniform(0, 1) < EPSILON:
+                    print("EPSILON")
                     job = random.sample(actions, 1)[0]                                      # explore
                 else:
+                    print("HIGHEST")
                     s_index = self.states.index(waiting)
                     a_indices = [job.j for job in waiting]
-                    a_indices.append(n)
-                    if state_action == "st_act":
+                    a_indices.append(N)
+                    if STACT == "st_act":
                         j = a_indices[np.argmax(resource.policy[s_index, a_indices])]       # exploit
-                    if state_action == "act":
+                    if STACT == "act":
                         j = a_indices[np.argmax(resource.policy[a_indices])]
                     job = self.actions[j]
 
@@ -191,17 +193,17 @@ class MDP(object):
                     resource.last_job = job                 # update last processed job
                     unit.state.remove(job)                  # remove job from all waiting lists
                     unit.processing = job                   # set unit to processing job
-                    job.t = time                            # set starting time job
-                    duration = delta[unit.i][job.j][unit.q]
-                    unit.c = time + duration                # set completion time on unit
-                    resource.schedule.append((job.j,time))  # add to schedule
+                    job.t = z                               # set starting time job
+                    duration = delta[job.j][unit.q][resource.i]
+                    unit.c = z + duration                   # set completion time on unit
+                    resource.schedule.append((job.j,z))     # add to schedule
             else:
                 resource.last_action = None
                     
-        if method == "Q_learning":
-            self.resources = update_policy_Q(self.resources, self.states, self.actions)
-        if method == "JEPS":
-            self.resources = update_history(self.resources, time)
+        if METHOD == "Q_learning":
+            self.resources = update_policy_Q(self.resources, self.states, self.actions, STACT)
+        if METHOD == "JEPS":
+            self.resources = update_history(self.resources, z)
             
         return self, False
 
