@@ -1,8 +1,7 @@
 import numpy as np
 import random
 from itertools import chain, combinations
-from settings import *
-from tester import *
+from main import *
 
 def update_policy_Q(resources, states, actions, STACT):
     for resource in resources:
@@ -66,6 +65,7 @@ class Unit(object):
     def reset(self, waiting):
         self.processing = None  # job that is being processed
         self.c = None           # completion time of current job
+        self.c_idle = None      # time of becoming idle after job completion
         
         # state of unit = jobs waiting to be processed on unit
         if self.q == 0:
@@ -109,7 +109,7 @@ class MDP(object):
         self.DONE = False
 
     # TAKE A TIMESTEP
-    def step(self, z, GV, N, delta, ALPHA, GAMMA, EPSILON, STACT, heur_job, heur_res, heur_order):
+    def step(self, z, GV, N, METHOD, delta, ALPHA, GAMMA, EPSILON, STACT, heur_job, heur_res, heur_order):
 
         for resource in self.resources:
             resource.reward -= 1                            # timestep penalty
@@ -120,14 +120,16 @@ class MDP(object):
                 unit = resource.units[q]
                 if unit.c == z:
                     job = unit.processing           # remember what job it was processing
-                    unit.processing = None          # set unit to idle
-                    
-                    if q < (GV-1):                 # if this is not the last 
-                        nxt = resource.units[q+1]   # next unit in the resource
-                        nxt.state.append(job)       # add job to waiting list for next unit
-                    else:
+                    if q == (GV-1):
                         job.done = True             # set job to done
                         job.c = z                   # save completion time of job
+                
+                if unit.c_idle == z:
+                    job = unit.processing
+                    unit.processing = None          # set unit to idle
+                    if q < (GV-1):                  # if this is not the last 
+                        nxt = resource.units[q+1]   # next unit in the resource
+                        nxt.state.append(job)       # add job to waiting list for next unit
 
         # CHECK WHETHER ALL JOBS ARE FINISHED
         if all([job.done for job in self.jobs]):
@@ -144,8 +146,10 @@ class MDP(object):
                     if unit.processing == None:     # check if unit is currently idle
                         job = unit.state.pop(0)     # pick first waiting job
                         unit.processing = job       # set unit to processing selected job
-                        duration = delta[job.j][unit.q][resource.i]
-                        unit.c = z + duration       # set completion time
+                        completion = z + delta[job.j][unit.q][resource.i]
+                        unit.c = completion         # set completion time
+                        unit.c_idle = completion + 1
+                        resource.schedule.append((job.j,z))
                         
         # START PROCESSING OF NEW JOBS
         first_units = set([resource.units[0] for resource in self.resources])
@@ -192,8 +196,9 @@ class MDP(object):
                     unit.state.remove(job)                  # remove job from all waiting lists
                     unit.processing = job                   # set unit to processing job
                     job.t = z 
-                    duration = delta[job.j][unit.q][resource.i]
-                    unit.c = z + duration                   # set completion time on unit
+                    completion = z + delta[job.j][unit.q][resource.i]
+                    unit.c = completion                     # set completion time on unit
+                    unit.c_idle = completion +1
                     resource.schedule.append((job.j,z))     # add to schedule
             else:
                 resource.last_action = None

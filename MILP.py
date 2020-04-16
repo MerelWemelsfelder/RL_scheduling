@@ -35,8 +35,10 @@ def MILP_solve(M, LV, GV, N):
 	    print('Warning: MILP and schedule simulation give different objective'
 	          ' values')
 
-	# print(schedule)
-	# print(objVal)
+	(s, p, delta, gamma, WT, fMax, FMax, f) = decVars
+	print(s[0])
+	print(f[0])
+	
 	return schedule, objVal
 
 
