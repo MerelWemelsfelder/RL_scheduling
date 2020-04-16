@@ -1,45 +1,38 @@
 import numpy as np
 import random
 from itertools import chain, combinations
-from main import *
 
-def update_policy_Q(resources, states, actions, STACT):
-    for resource in resources:
-        resource.state = resource.units[0].state.copy()     # update resource state
-        
-        if resource.last_action != None:
-            s1 = states.index(resource.state)          # current state
-            s0 = states.index(resource.prev_state)     # previous state
-            a = actions.index(resource.last_action)    # taken action
+from Q_learning import *
+from JEPS import *
 
-            if STACT == "st_act":
-                next_max = np.max(resource.policy[s1])    # max q-value of current state
-                q_old = resource.policy[s0, a]
-                q_new = (1 - ALPHA) * q_old + ALPHA * (resource.reward + GAMMA * next_max)
-                resource.policy[s0, a] = q_new
-            if STACT == "act":
-                next_max = resource.policy[a]             # q-value of current state
-                q_old = resource.policy[a]
-                q_new = (1 - ALPHA) * q_old + ALPHA * (resource.reward + GAMMA * next_max)
-                resource.policy[a] = q_new
+class Schedule(object):
+    def __init__(self, B, D, N, LV, GV):
+        self.B = B              # all release dates
+        self.D = D              # all due dates
+        self.T = np.zeros([N])  # tardiness for all jobs
 
-        resource.reward = 0     # reset reward
+        self.t = np.zeros([N])          # starting times of jobs
+        self.t_q = np.zeros([N, GV])    # starting times of jobs on units
+        self.c = np.zeros([N])          # completion times of jobs
+        self.c_q = np.zeros([N, GV])    # completion times of jobs on units
 
-    return resources
+        # processed jobs per resource, like: [[4,2], [0,5,3], ..]
+        self.schedule = [[] for i in range(LV)]
+        for i in range(LV):
+            self.schedule[i] = []
 
-def update_history(resources, z):
-    for resource in resources:
-        resource.state = resource.units[0].state.copy()     # update resource state
+    def objectives(self):
+        self.Cmax = max(self.c) - min(self.t) # makespan
+        self.Tmax = max(self.T)                 # maximum tardiness
+        self.Tmean = np.mean(self.T)            # mean tardiness
+        self.Tn = sum(T>0 for T in self.T)       # number of tardy jobs
 
-        resource.h[z] = (resource.prev_state, resource.last_action)
+        return self
 
-    return resources
-
-# RESOURCE
 class Resource(object):
     def __init__(self, i, GV, policy_init):
         self.i = i                                      # index of r_i
-        self.units = [Unit(i, q) for q in range(GV)]   # units in resource
+        self.units = [Unit(i, q) for q in range(GV)]    # units in resource
         self.policy = policy_init.copy()                # initialize Q-table with zeros
         
     def reset(self, waiting):
@@ -56,7 +49,6 @@ class Resource(object):
         
         return self
 
-# UNIT
 class Unit(object):
     def __init__(self, i, q):
         self.i = i              # resource index of r_i
@@ -75,37 +67,33 @@ class Unit(object):
             
         return self
 
-# JOB
 class Job(object):
-    def __init__(self, j):
-        self.j = j
-        self.B = 1                                          # release date
-        self.D = random.sample(list(range(10,30)), 1)[0]    # due date
+    def __init__(self, j, D, B):
+        self.j = j      # job index
+        self.B = B      # release date
+        self.D = D      # due date
         
     def reset(self):
         self.done = False       # whether all processing is completed
-        self.t = None           # time start processing
-        self.c = None           # time completion processing
         
         return self
 
-# MDP
 class MDP(object):
     # INITIALIZE MDP ENVIRONMENT
-    def __init__(self, LV, GV, N, policy_init):
-        self.jobs = [Job(j) for j in range(N)]
+    def __init__(self, LV, GV, N, policy_init, due_dates, release_dates):
+        self.jobs = [Job(j, due_dates[j], release_dates[j]) for j in range(N)]
         self.actions = self.jobs.copy()
         self.actions.append("do_nothing")
         self.states = [list(state) for state in list(powerset(self.jobs))]
         self.resources = [Resource(i, GV, policy_init) for i in range(LV)]
         
     # RESET MDP ENVIRONMENT
-    def reset(self):
+    def reset(self, due_dates, release_dates, LV, GV, N):
         self.jobs = [j.reset() for j in self.jobs]
         waiting = self.jobs.copy()
         self.resources = [resource.reset(waiting) for resource in self.resources]
         
-        self.makespan = None
+        self.schedule = Schedule(release_dates, due_dates, N, LV, GV)
         self.DONE = False
 
     # TAKE A TIMESTEP
@@ -119,10 +107,14 @@ class MDP(object):
             for q in range(GV):
                 unit = resource.units[q]
                 if unit.c == z:
-                    job = unit.processing           # remember what job it was processing
+                    job = unit.processing
+                    self.schedule.c_q[job.j][unit.q] = z
+                    
+                    # If job is finished at the last unit of a resource
                     if q == (GV-1):
-                        job.done = True             # set job to done
-                        job.c = z                   # save completion time of job
+                        job.done = True 
+                        self.schedule.c[job.j] = z
+                        self.schedule.T[job.j] = max(z - self.schedule.D[job.j], 0)
                 
                 if unit.c_idle == z:
                     job = unit.processing
@@ -132,11 +124,7 @@ class MDP(object):
                         nxt.state.append(job)       # add job to waiting list for next unit
 
         # CHECK WHETHER ALL JOBS ARE FINISHED
-        if all([job.done for job in self.jobs]):
-            start = min([job.t for job in self.jobs])
-            end = max([job.c for job in self.jobs])
-            self.makespan = end - start
-            
+        if all([job.done for job in self.jobs]):            
             return self, True
                         
         # RESUME OPERATIONS BETWEEN UNITS
@@ -144,12 +132,15 @@ class MDP(object):
             for unit in resource.units[1:]:         # for all units exept q=0
                 if len(unit.state) > 0:             # check if there is a waithing list
                     if unit.processing == None:     # check if unit is currently idle
-                        job = unit.state.pop(0)     # pick first waiting job
-                        unit.processing = job       # set unit to processing selected job
+                        job = unit.state.pop(0)                 # pick first waiting job
+                        unit.processing = job                   # set unit to processing selected job
+                        self.schedule.t_q[job.j][unit.q] = z    # add unit starting time job j
+
                         completion = z + delta[job.j][unit.q][resource.i]
-                        unit.c = completion         # set completion time
+                        unit.c = completion
                         unit.c_idle = completion + 1
                         resource.schedule.append((job.j,z))
+
                         
         # START PROCESSING OF NEW JOBS
         first_units = set([resource.units[0] for resource in self.resources])
@@ -195,14 +186,18 @@ class MDP(object):
                     resource.last_job = job                 # update last processed job
                     unit.state.remove(job)                  # remove job from all waiting lists
                     unit.processing = job                   # set unit to processing job
-                    job.t = z 
+
+                    self.schedule.t[job.j] = z                    # add starting time job j
+                    self.schedule.t_q[job.j][unit.q] = z           # add unit starting time job j
+                    self.schedule.schedule[unit.i].append(job.j)    # add operation to schedule
+
                     completion = z + delta[job.j][unit.q][resource.i]
                     unit.c = completion                     # set completion time on unit
-                    unit.c_idle = completion +1
+                    unit.c_idle = completion + 1            # set when unit will be idle again
                     resource.schedule.append((job.j,z))     # add to schedule
             else:
                 resource.last_action = None
-                    
+
         if METHOD == "Q_learning":
             self.resources = update_policy_Q(self.resources, self.states, self.actions, STACT)
         if METHOD == "JEPS":
@@ -210,5 +205,5 @@ class MDP(object):
             
         return self, False
 
-
-
+def powerset(iterable):
+    return chain.from_iterable(combinations(iterable, r) for r in range(len(iterable)+1))
