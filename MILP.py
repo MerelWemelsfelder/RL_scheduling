@@ -24,8 +24,8 @@ def MILP_instance(M, LV, GV, N):
 def MILP_solve(M, LV, GV, N):
 	ins = MILP_instance(M, LV, GV, N)
 	model, decVars = st.solve_MILP(ins, startSol=None, saveModel=True)	# HIERHEEN
-	modelTight, decVarsTight = plot_best_schedule(ins, model, decVars, tightStartTimes=True)
-	schedule = schedule_tools.Schedule(ins, decVarsTight)
+	# modelTight, decVarsTight = plot_best_schedule(ins, model, decVars, tightStartTimes=True)
+	schedule = schedule_tools.Schedule(ins, decVars)
 	objVal = model.objVal
 
 	# evaluate schedule with simulation (sim)
@@ -38,7 +38,7 @@ def MILP_solve(M, LV, GV, N):
 	# (s, p, delta, gamma, WT, fMax, FMax, f) = decVars
 	# print(s[0])
 	# print(f[0])
-	
+
 	return schedule, objVal
 
 

@@ -22,7 +22,7 @@ class Schedule(object):
             self.schedule[i] = []
 
     def objectives(self):
-        self.Cmax = max(self.c) - min(self.t) # makespan
+        self.Cmax = max(self.c) - min(self.t)   # makespan
         self.Tmax = max(self.T)                 # maximum tardiness
         self.Tmean = np.mean(self.T)            # mean tardiness
         self.Tn = sum(T>0 for T in self.T)       # number of tardy jobs

@@ -2,6 +2,11 @@ import numpy as np
 import random, time
 from itertools import chain, combinations
 import scipy.stats
+import pickle
+import matplotlib
+import matplotlib.pyplot as plt
+import plotly.figure_factory as ff
+import os
 
 from MDP import *
 from JEPS import *
@@ -23,6 +28,7 @@ def find_schedule(M, LV, GV, N, delta, due_dates, release_dates, ALPHA, GAMMA, E
     RL = MDP(LV, GV, N, policy_init, due_dates, release_dates)            # initialize MDP
     r_best = 99999
     best_schedule = []
+    best_policy = np.zeros([LV, N+1])
     epoch_best_found = 0
     timer_start = time.time()
     for epoch in range(EPOCHS):
@@ -45,6 +51,9 @@ def find_schedule(M, LV, GV, N, delta, due_dates, release_dates, ALPHA, GAMMA, E
             best_schedule = schedule
             epoch_best_found = epoch
 
+            for i in range(len(RL.resources)):
+                best_policy[i] = RL.resources[i].policy
+
             if METHOD == "JEPS":
                 resources = RL.resources
                 states = RL.states
@@ -56,7 +65,7 @@ def find_schedule(M, LV, GV, N, delta, due_dates, release_dates, ALPHA, GAMMA, E
 
     timer_finish = time.time()
     calc_time = timer_finish - timer_start
-    return r_best, best_schedule, epoch_best_found, calc_time, RL
+    return r_best, best_schedule, best_policy, epoch_best_found, calc_time, RL
 
 def print_schedule(schedule, calc_time, MILP_schedule, MILP_objval, MILP_calctime):
     print("MILP solution")
@@ -79,37 +88,56 @@ def print_schedule(schedule, calc_time, MILP_schedule, MILP_objval, MILP_calctim
     print("starting times: "+str(schedule.t))
     print("completion times: "+str(schedule.c))
 
-    
-
 def write_log(OUTPUT_DIR, METHOD, STACT, N, LV, GV, EPOCHS, ALPHA, GAMMA, EPSILON, makespan, calc_time, epoch, MILP_objval, MILP_calctime):
     file = open(OUTPUT_DIR+"log.csv",'a')
     file.write("\n"+METHOD+","+STACT+","+str(N)+","+str(LV)+","+str(GV)+","+str(EPOCHS)+","+str(ALPHA)+","+str(GAMMA)+","+str(EPSILON)+","+str(makespan)+","+str(calc_time)+","+str(epoch)+","+str(MILP_objval)+","+str(MILP_calctime))
-    file.close() 
+    file.close()
+
+def write_training_files(OUTPUT_DIR, training_inputs, training_outputs):
+    with open(OUTPUT_DIR+'training_inputs.pickle','wb') as f:
+        pickle.dump(training_inputs, f)
+    with open(OUTPUT_DIR+'training_outputs.pickle','wb') as f:
+        pickle.dump(training_outputs, f)
+
+def plot_schedule(OUTPUT_DIR, schedule, N, LV, GV):
+    gantt = []
+    for i in range(LV):
+        for j in schedule.schedule[i]:
+            for q in range(GV):
+                start = schedule.t_q[j][q]
+                end = schedule.c_q[j][q]
+                gantt.append(dict(Task="u_"+str(i)+str(q), Start=start, Finish=end, Resource="job "+str(j)))
+
+    colors = dict()
+    for j in range(N):
+        colors["job "+str(j)] = (random.random(), random.random(), random.random())
+
+    print(colors) 
+    fig = ff.create_gantt(gantt, colors=colors, index_col='Resource', show_colorbar=True, group_tasks=True)
+    fig.write_image(OUTPUT_DIR+'schedule.png')
 
 def main():
     M = 1       # number of work stations
     LV = 3      # number of resources
     GV = 2      # number of units per resource
-    N = 7      # number of jobs
+    N = 5       # number of jobs
 
     ALPHA = 0.2     # learning rate (0<α≤1): the extent to which Q-values are updated every timestep
     GAMMA = 0.7     # discount factor (0≤γ≤1): how much importance to give to future rewards (1 = long term, 0 = greedy)   
-    EPSILON = 0.4   # probability of choosing a random action (= exploring)
+    EPSILON = 0.3   # probability of choosing a random action (= exploring)
 
     METHOD = "JEPS"
     STACT = "act"
 
-    EPOCHS = 10000       # set number of epochs to train RL model
+    EPOCHS = 8000       # set number of epochs to train RL model
     OUTPUT_DIR = '../output/'
 
-    file = open(OUTPUT_DIR+"log.csv",'a')
-    file.write("METHOD,STACT,N,LV,GV,EPOCHS,ALPHA,GAMMA,EPSILON,MAKESPAN,TIME,EPOCH_BEST,MILP_OBJVAL,MILP_CALCTIME")
-    file.close() 
+    # file = open(OUTPUT_DIR+"log.csv",'a')
+    # file.write("METHOD,STACT,N,LV,GV,EPOCHS,ALPHA,GAMMA,EPSILON,MAKESPAN,TIME,EPOCH_BEST,MILP_OBJVAL,MILP_CALCTIME")
+    # file.close() 
 
-    # for N in range(1,25):
-    #     for LV in range(1,11):
-    #         for GV in range(1,11):
-    #             for EPOCHS in range(1,10001,1000):
+    # training_inputs = []
+    # training_outputs = []
 
     ins = MILP_instance(M, LV, GV, N)
     timer_start = time.time()
@@ -122,12 +150,18 @@ def main():
     due_dates = ins.lAreaInstances[0].d
     release_dates = np.zeros([N])
 
-    # print("N: "+str(N)+", LV: "+str(LV)+", GV: "+str(GV)+", EPOCHS: "+str(EPOCHS))
+    makespan, schedule, policy, epoch, calc_time, RL = find_schedule(M, LV, GV, N, delta, due_dates, release_dates, ALPHA, GAMMA, EPSILON, EPOCHS, METHOD, STACT)
 
-    makespan, schedule, epoch, calc_time, RL = find_schedule(M, LV, GV, N, delta, due_dates, release_dates, ALPHA, GAMMA, EPSILON, EPOCHS, METHOD, STACT)
-
+    plot_schedule(OUTPUT_DIR, schedule, N, LV, GV)
     print_schedule(schedule, calc_time, MILP_schedule, MILP_objval, MILP_calctime)
+
     write_log(OUTPUT_DIR, METHOD, STACT, N, LV, GV, EPOCHS, ALPHA, GAMMA, EPSILON, makespan, calc_time, epoch, MILP_objval, MILP_calctime)
+
+    if makespan <= MILP_objval:
+        training_inputs.append(delta)
+        training_outputs.append(policy)
+
+        # write_training_files(OUTPUT_DIR, training_inputs, training_outputs)
 
 if __name__ == '__main__':
     main()
