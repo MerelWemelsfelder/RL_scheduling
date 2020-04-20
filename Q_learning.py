@@ -1,5 +1,5 @@
 
-def update_policy_Q(resources, states, actions, STACT):
+def update_policy_Q(resources, states, actions, STACT, ALPHA, GAMMA):
     for resource in resources:
         resource.state = resource.units[0].state.copy()     # update resource state
         
@@ -11,12 +11,12 @@ def update_policy_Q(resources, states, actions, STACT):
             if STACT == "st_act":
                 next_max = np.max(resource.policy[s1])    # max q-value of current state
                 q_old = resource.policy[s0, a]
-                q_new = (1 - ALPHA) * q_old + ALPHA * (resource.reward + GAMMA * next_max)
+                q_new = (1 - GAMMA) * q_old + GAMMA * (resource.reward + ALPHA * next_max)
                 resource.policy[s0, a] = q_new
             if STACT == "act":
                 next_max = resource.policy[a]             # q-value of current state
                 q_old = resource.policy[a]
-                q_new = (1 - ALPHA) * q_old + ALPHA * (resource.reward + GAMMA * next_max)
+                q_new = (1 - GAMMA) * q_old + GAMMA * (resource.reward + ALPHA * next_max)
                 resource.policy[a] = q_new
 
         resource.reward = 0     # reset reward

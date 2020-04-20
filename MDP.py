@@ -199,7 +199,7 @@ class MDP(object):
                 resource.last_action = None
 
         if METHOD == "Q_learning":
-            self.resources = update_policy_Q(self.resources, self.states, self.actions, STACT)
+            self.resources = update_policy_Q(self.resources, self.states, self.actions, STACT, ALPHA, GAMMA)
         if METHOD == "JEPS":
             self.resources = update_history(self.resources, z)
             
