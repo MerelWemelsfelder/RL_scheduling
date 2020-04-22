@@ -13,7 +13,7 @@ def update_policy_Q(resources, states, actions, STACT, ALPHA, GAMMA):
                 q_old = resource.policy[s0, a]
                 q_new = (1 - GAMMA) * q_old + GAMMA * (resource.reward + ALPHA * next_max)
                 resource.policy[s0, a] = q_new
-            if STACT == "act":
+            elif (STACT == "act") or (STACT == "NN"):
                 next_max = resource.policy[a]             # q-value of current state
                 q_old = resource.policy[a]
                 q_new = (1 - GAMMA) * q_old + GAMMA * (resource.reward + ALPHA * next_max)

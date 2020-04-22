@@ -18,12 +18,12 @@ def update_policy_JEPS(resource, states, actions, r_best, time_max, GAMMA, STACT
                 if job == a:
                     if STACT == "st_act":
                         resource.policy[s_index,a_index] = resource.policy[s_index,a_index] + (GAMMA * (1 - resource.policy[s_index,a_index]))
-                    if STACT == "act":
+                    elif (STACT == "act") or (STACT == "NN"):
                         resource.policy[a_index] = resource.policy[a_index] + (GAMMA * (1 - resource.policy[a_index]))
                 else:
                     if STACT == "st_act":
                         resource.policy[s_index,a_index] = (1 - GAMMA) * resource.policy[s_index,a_index]
-                    if STACT == "act":
+                    elif (STACT == "act") or (STACT == "NN"):
                         resource.policy[a_index] = (1 - GAMMA) * resource.policy[a_index]
     return resource
 

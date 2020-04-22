@@ -23,17 +23,28 @@ class Schedule(object):
 
     def objectives(self):
         self.Cmax = max(self.c) - min(self.t)   # makespan
+        self.Tsum = sum(self.T)                 # total tardiness
         self.Tmax = max(self.T)                 # maximum tardiness
         self.Tmean = np.mean(self.T)            # mean tardiness
-        self.Tn = sum(T>0 for T in self.T)       # number of tardy jobs
+        self.Tn = sum(T>0 for T in self.T)      # number of tardy jobs
 
         return self
+
+    def calc_reward(self, WEIGHTS, upper_bound):
+        r = 0
+        r += WEIGHTS["Cmax"] * self.Cmax
+        r += WEIGHTS["Tsum"] * self.Tsum
+        r += WEIGHTS["Tmax"] * self.Tmax
+        r += WEIGHTS["Tmean"] * self.Tmean
+        r += WEIGHTS["Tn"] * self.Tn
+
+        return r
 
 class Resource(object):
     def __init__(self, i, GV, policy_init):
         self.i = i                                      # index of r_i
         self.units = [Unit(i, q) for q in range(GV)]    # units in resource
-        self.policy = policy_init.copy()                # initialize Q-table with zeros
+        self.policy = policy_init[i]                    # initialize Q-table with zeros
         
     def reset(self, waiting):
         self.units = [unit.reset(waiting) for unit in self.units]
@@ -162,7 +173,7 @@ class MDP(object):
                     a_indices.append(N)
                     if STACT == "st_act":
                         j = a_indices[np.argmax(resource.policy[s_index, a_indices])]       # exploit
-                    if STACT == "act":
+                    if (STACT == "act") or (STACT == "NN"):
                         j = a_indices[np.argmax(resource.policy[a_indices])]
                     job = self.actions[j]
 
@@ -198,9 +209,9 @@ class MDP(object):
             else:
                 resource.last_action = None
 
-        if METHOD == "Q_learning":
+        if (METHOD == "Q_learning") or (METHOD == "combined"):
             self.resources = update_policy_Q(self.resources, self.states, self.actions, STACT, ALPHA, GAMMA)
-        if METHOD == "JEPS":
+        if (METHOD == "JEPS") or (METHOD == "combined"):
             self.resources = update_history(self.resources, z)
             
         return self, False
