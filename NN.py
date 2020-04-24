@@ -54,7 +54,7 @@ class NeuralNetwork:
         return prediction
 
 def policies_from_NN(delta):
-    with open('../output/NN_weights.pickle','rb') as f:
+    with open('NN_weights.pickle','rb') as f:
         weights = pickle.load(f)
 
     NN = NeuralNetwork()

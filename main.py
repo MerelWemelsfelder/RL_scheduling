@@ -209,7 +209,7 @@ def main():
     training_outputs = []
 
 
-    for N in range(10,16):
+    for N in range(16,19):
         for LV in range(1,16):
             for GV in range(1,11):
                 training_inputs, training_outputs = test(M, LV, GV, N, ALPHA, GAMMA, EPSILON, WEIGHTS, METHOD, STACT, EPOCHS, OUTPUT_DIR, training_inputs, training_outputs)
