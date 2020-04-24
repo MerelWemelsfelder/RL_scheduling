@@ -4,6 +4,7 @@ from itertools import chain, combinations
 
 from Q_learning import *
 from JEPS import *
+from NN import *
 
 class Schedule(object):
     def __init__(self, B, D, N, LV, GV):
@@ -30,21 +31,21 @@ class Schedule(object):
 
         return self
 
-    def calc_reward(self, WEIGHTS, upper_bound):
+    def calc_reward(self, R_WEIGHTS):
         r = 0
-        r += WEIGHTS["Cmax"] * self.Cmax
-        r += WEIGHTS["Tsum"] * self.Tsum
-        r += WEIGHTS["Tmax"] * self.Tmax
-        r += WEIGHTS["Tmean"] * self.Tmean
-        r += WEIGHTS["Tn"] * self.Tn
+        r += R_WEIGHTS["Cmax"] * self.Cmax
+        r += R_WEIGHTS["Tsum"] * self.Tsum
+        r += R_WEIGHTS["Tmax"] * self.Tmax
+        r += R_WEIGHTS["Tmean"] * self.Tmean
+        r += R_WEIGHTS["Tn"] * self.Tn
 
         return r
 
 class Resource(object):
-    def __init__(self, i, GV, policy_init):
+    def __init__(self, i, GV):
         self.i = i                                      # index of r_i
         self.units = [Unit(i, q) for q in range(GV)]    # units in resource
-        self.policy = policy_init[i]                    # initialize Q-table with zeros
+        # self.policy = policy_init[i]                    # initialize Q-table with zeros
         
     def reset(self, waiting):
         self.units = [unit.reset(waiting) for unit in self.units]
@@ -56,7 +57,7 @@ class Resource(object):
         self.last_job = None        # job that was processed most recently
         
         self.schedule = []          # stores tuples (job, starting time) for this resource
-        self.h = dict()
+        # self.h = dict()
         
         return self
 
@@ -91,12 +92,13 @@ class Job(object):
 
 class MDP(object):
     # INITIALIZE MDP ENVIRONMENT
-    def __init__(self, LV, GV, N, policy_init, due_dates, release_dates):
+    def __init__(self, LV, GV, N, due_dates, release_dates, NN_WEIGHTS_LEN):
         self.jobs = [Job(j, due_dates[j], release_dates[j]) for j in range(N)]
         self.actions = self.jobs.copy()
         self.actions.append("do_nothing")
         self.states = [list(state) for state in list(powerset(self.jobs))]
-        self.resources = [Resource(i, GV, policy_init) for i in range(LV)]
+        self.resources = [Resource(i, GV) for i in range(LV)]
+        self.policy_function = NeuralNetwork(NN_WEIGHTS_LEN)
         
     # RESET MDP ENVIRONMENT
     def reset(self, due_dates, release_dates, LV, GV, N):
@@ -104,11 +106,13 @@ class MDP(object):
         waiting = self.jobs.copy()
         self.resources = [resource.reset(waiting) for resource in self.resources]
         
+        self.NN_inputs = []
+        self.NN_predictions = []
         self.schedule = Schedule(release_dates, due_dates, N, LV, GV)
         self.DONE = False
 
     # TAKE A TIMESTEP
-    def step(self, z, GV, N, METHOD, delta, ALPHA, GAMMA, EPSILON, STACT, heur_job, heur_res, heur_order):
+    def step(self, z, N, LV, GV, ALPHA, GAMMA, EPSILON, delta, STACT, heur_job, heur_res, heur_order):
 
         for resource in self.resources:
             resource.reward -= 1                            # timestep penalty
@@ -164,36 +168,25 @@ class MDP(object):
                 actions.append("do_nothing")          # add option to do nothing
                 
                 # choose random action with probability EPSILON,
-                # otherwise choose action with highest Q-value
+                # otherwise choose action with highest policy value
                 if random.uniform(0, 1) < EPSILON:
-                    job = random.sample(actions, 1)[0]                                      # explore
+                    job = random.sample(actions, 1)[0]
                 else:
                     s_index = self.states.index(waiting)
                     a_indices = [job.j for job in waiting]
                     a_indices.append(N)
-                    if STACT == "st_act":
-                        j = a_indices[np.argmax(resource.policy[s_index, a_indices])]       # exploit
-                    if (STACT == "act") or (STACT == "NN"):
-                        j = a_indices[np.argmax(resource.policy[a_indices])]
+                    
+                    values = []
+                    for j in a_indices:
+                        inputs = generate_NN_input(resource.i, j, resource.last_job, z, heur_job, heur_res, heur_order, N, LV, GV)
+                        values.append(self.policy_function.predict(inputs))
+                    j = a_indices[np.argmax(values)]
+                    self.NN_inputs.append(generate_NN_input(resource.i, j, resource.last_job, z, heur_job, heur_res, heur_order, N, LV, GV))
+                    self.NN_predictions.append(self.policy_function.predict(inputs))
                     job = self.actions[j]
 
                 resource.last_action = job                  # update last executed action
                 if job != "do_nothing":
-                    # give a reward for choosing the job with shortest processing time on resource i
-                    best_job = min(heur_job[resource.i], key=heur_job[resource.i].get)
-                    if job.j == best_job:
-                        resource.reward += 3
-
-                    # give a reward for choosing the job which has its shortest processing time on resource i
-                    best_resource = min(heur_res[job.j], key=heur_res[job.j].get)
-                    if resource.i == best_resource:
-                        resource.reward += 5
-
-                    if resource.last_job != None:
-                        # give negative reward for blocking due to scheduling order
-                        blocking = heur_order[resource.i][job.j][resource.last_job.j]
-                        resource.reward -= blocking
-
                     resource.last_job = job                 # update last processed job
                     unit.state.remove(job)                  # remove job from all waiting lists
                     unit.processing = job                   # set unit to processing job
@@ -209,11 +202,6 @@ class MDP(object):
             else:
                 resource.last_action = None
 
-        if (METHOD == "Q_learning") or (METHOD == "combined"):
-            self.resources = update_policy_Q(self.resources, self.states, self.actions, STACT, ALPHA, GAMMA)
-        if (METHOD == "JEPS") or (METHOD == "combined"):
-            self.resources = update_history(self.resources, z)
-            
         return self, False
 
 def powerset(iterable):

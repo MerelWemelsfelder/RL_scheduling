@@ -23,6 +23,7 @@ def update_policy_Q(resources, states, actions, STACT, ALPHA, GAMMA):
 
     return resources
 
+# for each resource, the time that each job costs to process
 def heuristic_best_job(tau, LV, GV, N):
     heur_job = dict()
 
@@ -37,6 +38,7 @@ def heuristic_best_job(tau, LV, GV, N):
 
     return heur_job
 
+# for each job, the time it costs for each resource if processed on it
 def heuristic_best_resource(heur_j):
     heur_r = dict()
     for j in heur_j[0].keys():
