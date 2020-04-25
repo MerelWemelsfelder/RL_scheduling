@@ -112,7 +112,7 @@ class MDP(object):
         self.DONE = False
 
     # TAKE A TIMESTEP
-    def step(self, z, N, LV, GV, GAMMA, EPSILON, delta, heur_job, heur_res, heur_order, PHASE):
+    def step(self, z, N, LV, GV, GAMMA, EPSILON, delta, heur_job, heur_res, heur_order, PHASE, METHOD):
 
         for resource in self.resources:
             # Update previous state for all resources

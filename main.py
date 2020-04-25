@@ -14,8 +14,15 @@ def find_schedule(M, N, LV, GV, GAMMA, EPSILON, delta, due_dates, release_dates,
     heur_res = heuristic_best_resource(heur_job)
     heur_order = heuristic_order(delta, N, LV, GV)
 
-    if (PHASE == "load") and (METHOD == "JEPS"):
-        policies = load_NN_into_JEPS(N, LV, GV, heur_job, heur_res, heur_order)
+    policies = np.zeros([LV, N+1])
+    # Load stored weights for the policy value function
+    if PHASE == "load":
+        with open('NN_weights.pickle','rb') as f:
+            NN_weights = pickle.load(f)
+
+        # Transform the NN weights into policies to be used by JEPS
+        if METHOD == "JEPS":
+            policies = load_NN_into_JEPS(NN_weights, policies, N, LV, GV, heur_job, heur_res, heur_order)
 
     # First epoch, used as initialization of all parameters and results
     RL = MDP(N, LV, GV, release_dates, due_dates, NN_weights, policies)
@@ -24,7 +31,7 @@ def find_schedule(M, N, LV, GV, GAMMA, EPSILON, delta, due_dates, release_dates,
     z = 0
     RL.reset(N, LV, GV, release_dates, due_dates)
     while not DONE:
-        RL, DONE = RL.step(z, N, LV, GV, GAMMA, EPSILON, delta, heur_job, heur_res, heur_order, PHASE)
+        RL, DONE = RL.step(z, N, LV, GV, GAMMA, EPSILON, delta, heur_job, heur_res, heur_order, PHASE, METHOD)
         z += 1
     schedule = RL.schedule.objectives()
     r_best = schedule.calc_reward(R_WEIGHTS)
@@ -40,7 +47,7 @@ def find_schedule(M, N, LV, GV, GAMMA, EPSILON, delta, due_dates, release_dates,
         
         # take timesteps until processing of all jobs is finished
         while not DONE:
-            RL, DONE = RL.step(z, N, LV, GV, GAMMA, EPSILON, delta, heur_job, heur_res, heur_order)
+            RL, DONE = RL.step(z, N, LV, GV, GAMMA, EPSILON, delta, heur_job, heur_res, heur_order, PHASE, METHOD)
             z += 1
 
         # Load the resulting schedule and its objective value
@@ -95,7 +102,7 @@ def test(M, N, LV, GV, GAMMA, EPSILON, R_WEIGHTS, NN_weights, PHASE, METHOD, EPO
 
     plot_schedule(OUTPUT_DIR, schedule, N, LV, GV)
     # print_schedule(schedule, calc_time, MILP_schedule, MILP_objval, MILP_calctime)
-    write_NN_weights(OUTPUT_DIR, N, LV, GV, EPSILON, NN_weights)
+    # write_NN_weights(OUTPUT_DIR, N, LV, GV, EPSILON, NN_weights)
     write_log(OUTPUT_DIR, N, LV, GV, GAMMA, EPSILON, METHOD, EPOCHS, makespan, calc_time, epoch, MILP_objval, MILP_calctime)
 
     return NN_weights
@@ -108,7 +115,7 @@ def main():
 
     # ALPHA = 0.4   # discount factor (0≤α≤1): how much importance to give to future rewards (1 = long term, 0 = greedy)
     GAMMA = 0.8     # learning rate (0<γ≤1): the extent to which Q-values are updated every timestep / epoch
-    EPSILON = 0.5   # probability of choosing a random action (= exploring)
+    EPSILON = 0.2   # probability of choosing a random action (= exploring)
 
     R_WEIGHTS = {
         "Cmax": 1,
@@ -120,21 +127,23 @@ def main():
 
     NN_weights = np.random.rand(8)
 
-    PHASE = "train"     # train / load
-    METHOD = "JEPS"     # JEPS / Q_learning / NN
+    PHASE = "load"     # train / load
+    METHOD = "NN"     # JEPS / Q_learning / NN
 
-    EPOCHS = 3000
+    EPOCHS = 1
     OUTPUT_DIR = '../output/'
 
     file = open(OUTPUT_DIR+"log.csv",'a')
     file.write("METHOD,N,LV,GV,EPOCHS,GAMMA,EPSILON,MAKESPAN,TIME,EPOCH_BEST,MILP_OBJVAL,MILP_CALCTIME")
     file.close() 
 
-    for N in range(2,26):
-        for LV in range(2,16):
+    for N in range(1,26):
+        for LV in range(1,16):
             for GV in range(1,6):
-                print(str(N)+","+str(LV)+","+str(GV)+","+str(EPSILON))
-                NN_weights = test(M, N, LV, GV, GAMMA, EPSILON, R_WEIGHTS, NN_weights, PHASE, METHOD, EPOCHS, OUTPUT_DIR)
+                for METHOD in ["NN","JEPS"]:
+                    for EPOCHS in range(1,100,1000):
+                        print(str(N)+","+str(LV)+","+str(GV)+","+str(METHOD)+","+str(EPOCHS))
+                        NN_weights = test(M, N, LV, GV, GAMMA, EPSILON, R_WEIGHTS, NN_weights, PHASE, METHOD, EPOCHS, OUTPUT_DIR)
     
 if __name__ == '__main__':
     main()

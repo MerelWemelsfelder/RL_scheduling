@@ -5,6 +5,8 @@ import matplotlib.pyplot as plt
 import os
 from matplotlib.lines import Line2D
 
+from NN import *
+
 # Print found schedule in the terminal
 def print_schedule(schedule, calc_time, MILP_schedule, MILP_objval, MILP_calctime):
     print("MILP solution")
@@ -128,12 +130,9 @@ def heuristic_order(delta, N, LV, GV):
 
 # Execute the NN policy value function with stored weights
 # to initialize policy values to be used by JEPS
-def load_NN_into_JEPS(N, LV, GV, heur_job, heur_res, heur_order):
-    with open('NN_weights.pickle','rb') as f:
-        NN_weights = pickle.load(f)
+def load_NN_into_JEPS(NN_weights, policies, N, LV, GV, heur_job, heur_res, heur_order):
     policy_function = NeuralNetwork(NN_weights)
 
-    policies = np.zeros([LV, N+1])
     for i in range(LV):
         for j in range(N+1):
             inputs = generate_NN_input(i, j, None, 0, heur_job, heur_res, heur_order, N, LV, GV)
