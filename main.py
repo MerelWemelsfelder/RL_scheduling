@@ -1,17 +1,8 @@
 import numpy as np
 import random, time
-from itertools import chain, combinations
-import scipy.stats
-import pickle
-import matplotlib
-import matplotlib.pyplot as plt
-import plotly.figure_factory as ff
-import os
-from matplotlib.lines import Line2D
 
 from MDP import *
 from JEPS import *
-# from Q_learning import *
 from MILP import *
 from NN import *
 from utils import *
@@ -115,7 +106,7 @@ def main():
     GV = 2      # number of units per resource
     N = 6       # number of jobs
 
-    # ALPHA = 0.4     # discount factor (0≤α≤1): how much importance to give to future rewards (1 = long term, 0 = greedy)
+    # ALPHA = 0.4   # discount factor (0≤α≤1): how much importance to give to future rewards (1 = long term, 0 = greedy)
     GAMMA = 0.8     # learning rate (0<γ≤1): the extent to which Q-values are updated every timestep / epoch
     EPSILON = 0.5   # probability of choosing a random action (= exploring)
 
