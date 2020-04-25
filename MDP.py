@@ -2,7 +2,7 @@ import numpy as np
 import random
 from itertools import chain, combinations
 
-from Q_learning import *
+# from Q_learning import *
 from JEPS import *
 from NN import *
 
@@ -42,10 +42,10 @@ class Schedule(object):
         return r
 
 class Resource(object):
-    def __init__(self, i, GV):
+    def __init__(self, i, GV, policies):
         self.i = i                                      # index of r_i
         self.units = [Unit(i, q) for q in range(GV)]    # units in resource
-        # self.policy = policy_init[i]                    # initialize Q-table with zeros
+        self.policy = policies[i]                       # initialize Q-table with zeros
         
     def reset(self, waiting):
         self.units = [unit.reset(waiting) for unit in self.units]
@@ -57,7 +57,7 @@ class Resource(object):
         self.last_job = None        # job that was processed most recently
         
         self.schedule = []          # stores tuples (job, starting time) for this resource
-        # self.h = dict()
+        self.h = dict()
         
         return self
 
@@ -86,22 +86,22 @@ class Job(object):
         self.D = D      # due date
         
     def reset(self):
-        self.done = False       # whether all processing is completed
+        self.done = False
         
         return self
 
 class MDP(object):
     # INITIALIZE MDP ENVIRONMENT
-    def __init__(self, LV, GV, N, due_dates, release_dates, NN_WEIGHTS_LEN):
+    def __init__(self, N, LV, GV, release_dates, due_dates, NN_weights, policies):
         self.jobs = [Job(j, due_dates[j], release_dates[j]) for j in range(N)]
         self.actions = self.jobs.copy()
         self.actions.append("do_nothing")
         self.states = [list(state) for state in list(powerset(self.jobs))]
-        self.resources = [Resource(i, GV) for i in range(LV)]
-        self.policy_function = NeuralNetwork(NN_WEIGHTS_LEN)
+        self.resources = [Resource(i, GV, policies) for i in range(LV)]
+        self.policy_function = NeuralNetwork(NN_weights)
         
     # RESET MDP ENVIRONMENT
-    def reset(self, due_dates, release_dates, LV, GV, N):
+    def reset(self, N, LV, GV, release_dates, due_dates):
         self.jobs = [j.reset() for j in self.jobs]
         waiting = self.jobs.copy()
         self.resources = [resource.reset(waiting) for resource in self.resources]
@@ -112,16 +112,17 @@ class MDP(object):
         self.DONE = False
 
     # TAKE A TIMESTEP
-    def step(self, z, N, LV, GV, ALPHA, GAMMA, EPSILON, delta, STACT, heur_job, heur_res, heur_order):
+    def step(self, z, N, LV, GV, GAMMA, EPSILON, delta, heur_job, heur_res, heur_order, PHASE):
 
         for resource in self.resources:
-            resource.reward -= 1                            # timestep penalty
-            resource.prev_state = resource.state.copy()     # update previous state
+            # Update previous state for all resources
+            resource.prev_state = resource.state.copy()
 
             # REACHED COMPLETION TIMES
             for q in range(GV):
                 unit = resource.units[q]
                 if unit.c == z:
+                    # Add unit completion time to the schedule
                     job = unit.processing
                     self.schedule.c_q[job.j][unit.q] = z
                     
@@ -131,12 +132,13 @@ class MDP(object):
                         self.schedule.c[job.j] = z
                         self.schedule.T[job.j] = max(z - self.schedule.D[job.j], 0)
                 
+                # Set unit to idle and add job to waiting list for the next unit
                 if unit.c_idle == z:
                     job = unit.processing
-                    unit.processing = None          # set unit to idle
-                    if q < (GV-1):                  # if this is not the last 
-                        nxt = resource.units[q+1]   # next unit in the resource
-                        nxt.state.append(job)       # add job to waiting list for next unit
+                    unit.processing = None
+                    if q < (GV-1):
+                        nxt = resource.units[q+1] 
+                        nxt.state.append(job)
 
         # CHECK WHETHER ALL JOBS ARE FINISHED
         if all([job.done for job in self.jobs]):            
@@ -163,9 +165,9 @@ class MDP(object):
             resource = self.resources[unit.i]
             
             if unit.processing == None:
-                waiting = unit.state.copy()           # create action set
+                waiting = unit.state.copy()
                 actions = waiting.copy()
-                actions.append("do_nothing")          # add option to do nothing
+                actions.append("do_nothing")
                 
                 # choose random action with probability EPSILON,
                 # otherwise choose action with highest policy value
@@ -175,14 +177,18 @@ class MDP(object):
                     s_index = self.states.index(waiting)
                     a_indices = [job.j for job in waiting]
                     a_indices.append(N)
+
+                    if (PHASE == "train") or (METHOD == "NN"):
+                        values = []
+                        for j in a_indices:
+                            inputs = generate_NN_input(resource.i, j, resource.last_job, z, heur_job, heur_res, heur_order, N, LV, GV)
+                            values.append(self.policy_function.predict(inputs))
+                        j = a_indices[np.argmax(values)]
+                        self.NN_inputs.append(generate_NN_input(resource.i, j, resource.last_job, z, heur_job, heur_res, heur_order, N, LV, GV))
+                        self.NN_predictions.append(self.policy_function.predict(inputs))
+                    elif (PHASE == "load") and (METHOD == "JEPS"):
+                        j = a_indices[np.argmax(resource.policy[a_indices])]
                     
-                    values = []
-                    for j in a_indices:
-                        inputs = generate_NN_input(resource.i, j, resource.last_job, z, heur_job, heur_res, heur_order, N, LV, GV)
-                        values.append(self.policy_function.predict(inputs))
-                    j = a_indices[np.argmax(values)]
-                    self.NN_inputs.append(generate_NN_input(resource.i, j, resource.last_job, z, heur_job, heur_res, heur_order, N, LV, GV))
-                    self.NN_predictions.append(self.policy_function.predict(inputs))
                     job = self.actions[j]
 
                 resource.last_action = job                  # update last executed action
@@ -191,8 +197,8 @@ class MDP(object):
                     unit.state.remove(job)                  # remove job from all waiting lists
                     unit.processing = job                   # set unit to processing job
 
-                    self.schedule.t[job.j] = z                    # add starting time job j
-                    self.schedule.t_q[job.j][unit.q] = z           # add unit starting time job j
+                    self.schedule.t[job.j] = z                      # add starting time job j
+                    self.schedule.t_q[job.j][unit.q] = z            # add unit starting time job j
                     self.schedule.schedule[unit.i].append(job.j)    # add operation to schedule
 
                     completion = z + delta[job.j][unit.q][resource.i]
@@ -201,6 +207,9 @@ class MDP(object):
                     resource.schedule.append((job.j,z))     # add to schedule
             else:
                 resource.last_action = None
+
+        if (PHASE == "load") and (METHOD == "JEPS"):
+            self.resources = update_history(self.resources, z)
 
         return self, False
 

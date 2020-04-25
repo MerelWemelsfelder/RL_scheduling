@@ -1,4 +1,3 @@
-
 def update_policy_Q(resources, states, actions, STACT, ALPHA, GAMMA):
     for resource in resources:
         resource.state = resource.units[0].state.copy()     # update resource state
@@ -22,56 +21,3 @@ def update_policy_Q(resources, states, actions, STACT, ALPHA, GAMMA):
         resource.reward = 0     # reset reward
 
     return resources
-
-# for each resource, the time that each job costs to process
-def heuristic_best_job(tau, LV, GV, N):
-    heur_job = dict()
-
-    for i in range(LV):
-        heur_j = dict()
-        for j in range(N):
-            j_total = 0
-            for q in range(GV):
-                j_total += tau[j][q][i]
-            heur_j[j] = j_total
-        heur_job[i] = heur_j
-
-    return heur_job
-
-# for each job, the time it costs for each resource if processed on it
-def heuristic_best_resource(heur_j):
-    heur_r = dict()
-    for j in heur_j[0].keys():
-        heur_r[j] = dict()
-        for r in heur_j.keys():
-            heur_r[j][r] = heur_j[r][j]
-    return heur_r
-
-def heuristic_order(delta, LV, GV, N):
-    all_jobs = list(range(N))
-    heur_order = dict()             # key = resource i
-    for i in range(LV):
-        r_dict = dict()             # key = job j
-        for j in range(N):
-            j_dict = dict()         # key = job o
-            other = all_jobs.copy()
-            other.remove(j)
-            for o in other:
-                counter = 0
-                spare = 0
-                for q in range(GV-1):
-                    dj = delta[j][q+1][i]
-                    do = delta[o][q][i]
-                    blocking = dj-do
-                    if blocking < 0:
-                        spare += blocking
-                    if blocking > 0:
-                        if spare >= blocking:
-                            spare -= blocking
-                        else:
-                            blocking -= spare
-                            counter += blocking
-                j_dict[o] = counter
-            r_dict[j] = j_dict
-        heur_order[i] = r_dict
-    return heur_order
