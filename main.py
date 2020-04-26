@@ -71,7 +71,7 @@ def find_schedule(M, N, LV, GV, GAMMA, EPSILON, delta, due_dates, release_dates,
 
     timer_finish = time.time()
     calc_time = timer_finish - timer_start
-    return r_best, best_schedule, epoch_best_found, calc_time, RL, RL.policy_function.weights
+    return best_schedule, epoch_best_found, calc_time, RL, RL.policy_function.weights
 
 # Test function, which executes the both the MILP and the NN/JEPS algorithm, and stores all relevant information
 def test(M, N, LV, GV, GAMMA, EPSILON, R_WEIGHTS, NN_weights, PHASE, METHOD, EPOCHS, OUTPUT_DIR):
@@ -98,12 +98,16 @@ def test(M, N, LV, GV, GAMMA, EPSILON, R_WEIGHTS, NN_weights, PHASE, METHOD, EPO
     #     max_d.append(max(d))
     # upper_bound = sum(max_d) + (N-1)
 
-    makespan, schedule, epoch, calc_time, RL, NN_weights = find_schedule(M, N, LV, GV, GAMMA, EPSILON, delta, due_dates, release_dates, R_WEIGHTS, NN_weights, PHASE, METHOD, EPOCHS, OUTPUT_DIR)
+    schedule, epoch, calc_time, RL, NN_weights = find_schedule(M, N, LV, GV, GAMMA, EPSILON, delta, due_dates, release_dates, R_WEIGHTS, NN_weights, PHASE, METHOD, EPOCHS, OUTPUT_DIR)
+
+    makespan = schedule.Cmax
+    Tmax = schedule.Tmax
+    Tn = schedule.Tn
 
     plot_schedule(OUTPUT_DIR, schedule, N, LV, GV)
     # print_schedule(schedule, calc_time, MILP_schedule, MILP_objval, MILP_calctime)
     # write_NN_weights(OUTPUT_DIR, N, LV, GV, EPSILON, NN_weights)
-    write_log(OUTPUT_DIR, N, LV, GV, GAMMA, EPSILON, METHOD, EPOCHS, makespan, calc_time, epoch, MILP_objval, MILP_calctime)
+    write_log(OUTPUT_DIR, N, LV, GV, GAMMA, EPSILON, METHOD, EPOCHS, makespan, Tmax, Tn, calc_time, epoch, MILP_objval, MILP_calctime)
 
     return NN_weights
 
@@ -134,14 +138,14 @@ def main():
     OUTPUT_DIR = '../output/'
 
     file = open(OUTPUT_DIR+"log.csv",'a')
-    file.write("METHOD,N,LV,GV,EPOCHS,GAMMA,EPSILON,MAKESPAN,TIME,EPOCH_BEST,MILP_OBJVAL,MILP_CALCTIME")
-    file.close() 
+    file.write("METHOD,N,LV,GV,EPOCHS,GAMMA,EPSILON,MAKESPAN,TMAX,TN,TIME,EPOCH_BEST,MILP_OBJVAL,MILP_CALCTIME")
+    file.close()
 
     for N in range(1,26):
         for LV in range(1,16):
             for GV in range(1,6):
                 for METHOD in ["NN","JEPS"]:
-                    for EPOCHS in range(1,100,1000):
+                    for EPOCHS in [1,100,1000]:
                         print(str(N)+","+str(LV)+","+str(GV)+","+str(METHOD)+","+str(EPOCHS))
                         NN_weights = test(M, N, LV, GV, GAMMA, EPSILON, R_WEIGHTS, NN_weights, PHASE, METHOD, EPOCHS, OUTPUT_DIR)
     

@@ -63,9 +63,9 @@ def plot_schedule(OUTPUT_DIR, schedule, N, LV, GV):
     plt.close(fig)
 
 # Store statistics of some test iteration to log file
-def write_log(OUTPUT_DIR, N, LV, GV, GAMMA, EPSILON, METHOD, EPOCHS, makespan, calc_time, epoch, MILP_objval, MILP_calctime):
+def write_log(OUTPUT_DIR, N, LV, GV, GAMMA, EPSILON, METHOD, EPOCHS, makespan, Tmax, Tn, calc_time, epoch, MILP_objval, MILP_calctime):
     file = open(OUTPUT_DIR+"log.csv",'a')
-    file.write("\n"+METHOD+","+str(N)+","+str(LV)+","+str(GV)+","+str(EPOCHS)+","+str(GAMMA)+","+str(EPSILON)+","+str(makespan)+","+str(calc_time)+","+str(epoch)+","+str(MILP_objval)+","+str(MILP_calctime))
+    file.write("\n"+METHOD+","+str(N)+","+str(LV)+","+str(GV)+","+str(EPOCHS)+","+str(GAMMA)+","+str(EPSILON)+","+str(makespan)+","+str(Tmax)+","+str(Tn)+","+str(calc_time)+","+str(epoch)+","+str(MILP_objval)+","+str(MILP_calctime))
     file.close()
 
 # Store the trained weights of the Neural Network, used as a policy value function
