@@ -29,28 +29,35 @@ class NeuralNetwork:
         return prediction
 
 # Generate the input vector for value prediction by the Neural Network
-def generate_NN_input(i, j, o, z, heur_job, heur_res, heur_order, N, LV, GV):
+def generate_NN_input(i, j, due_date, o, z, heur_job, heur_res, heur_order, N, LV, GV):
     # if the chosen action is the idle action "do_nothing"
     if j == N:
         idle_action = 1
-        calctime_job = 0
-        calctime_resource = 0
+        proctime_job = 0
+        proctime_resource = 0
+        T_expected = 0
+        relative_time_to_duedate = 0
         blocking = 0
 
     # if the chosen action is a waiting job
     else:
         idle_action = 0
+
+        processing_time = heur_job[i][j]
         # how many standard deviations is the processing time of job j on
         # resource i from the average processing time of all jobs on resource i
-        calctime_job = (j-np.mean(list(heur_job[i].values())))/np.std(list(heur_job[i].values()))
+        proctime_job = (processing_time-np.mean(list(heur_job[i].values())))/np.std(list(heur_job[i].values()))
         # how many standard deviations is the processing time of job j on
         # resource i from the average processing time of all jobs on resource i
-        calctime_resource = (j-np.mean(list(heur_res[j].values())))/np.std(list(heur_res[j].values())) 
+        proctime_resource = (processing_time-np.mean(list(heur_res[j].values())))/np.std(list(heur_res[j].values())) \
+
+        T_expected = (z + processing_time) - due_date
+        relative_time_to_duedate = (due_date - z) / due_date
 
         # blocking time due to the order of scheduled jobs on resource i
         if o == None:
             blocking = 0
         else:
             blocking = heur_order[i][j][o.j]
-    
-    return [N, LV, GV, z, calctime_job, calctime_resource, blocking, idle_action]
+
+    return [N, LV, GV, T_expected, relative_time_to_duedate, proctime_job, proctime_resource, blocking, idle_action]

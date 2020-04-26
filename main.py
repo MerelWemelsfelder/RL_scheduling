@@ -7,7 +7,7 @@ from MILP import *
 from NN import *
 from utils import *
 
-def find_schedule(M, N, LV, GV, GAMMA, EPSILON, delta, due_dates, release_dates, R_WEIGHTS, NN_weights, PHASE, METHOD, EPOCHS, OUTPUT_DIR):
+def find_schedule(M, N, LV, GV, GAMMA, EPSILON, delta, due_dates, release_dates, R_WEIGHTS, NN_weights, PHASE, METHOD, EPOCHS, OUTPUT_DIR, w_pickle):
     
     # Generate heuristics for Q_learning rewards
     heur_job = heuristic_best_job(delta, N, LV, GV)
@@ -17,12 +17,12 @@ def find_schedule(M, N, LV, GV, GAMMA, EPSILON, delta, due_dates, release_dates,
     policies = np.zeros([LV, N+1])
     # Load stored weights for the policy value function
     if PHASE == "load":
-        with open('NN_weights.pickle','rb') as f:
+        with open(w_pickle+'.pickle','rb') as f:
             NN_weights = pickle.load(f)
 
         # Transform the NN weights into policies to be used by JEPS
         if METHOD == "JEPS":
-            policies = load_NN_into_JEPS(NN_weights, policies, N, LV, GV, heur_job, heur_res, heur_order)
+            policies = load_NN_into_JEPS(NN_weights, policies, N, LV, GV, due_dates, heur_job, heur_res, heur_order)
 
     # First epoch, used as initialization of all parameters and results
     RL = MDP(N, LV, GV, release_dates, due_dates, NN_weights, policies)
@@ -74,7 +74,7 @@ def find_schedule(M, N, LV, GV, GAMMA, EPSILON, delta, due_dates, release_dates,
     return best_schedule, epoch_best_found, calc_time, RL, RL.policy_function.weights
 
 # Test function, which executes the both the MILP and the NN/JEPS algorithm, and stores all relevant information
-def test(M, N, LV, GV, GAMMA, EPSILON, R_WEIGHTS, NN_weights, PHASE, METHOD, EPOCHS, OUTPUT_DIR):
+def test(M, N, LV, GV, GAMMA, EPSILON, R_WEIGHTS, NN_weights, PHASE, METHOD, EPOCHS, OUTPUT_DIR, w_pickle):
     
     ins = MILP_instance(M, LV, GV, N)
     # MILP_objval = 0
@@ -98,16 +98,17 @@ def test(M, N, LV, GV, GAMMA, EPSILON, R_WEIGHTS, NN_weights, PHASE, METHOD, EPO
     #     max_d.append(max(d))
     # upper_bound = sum(max_d) + (N-1)
 
-    schedule, epoch, calc_time, RL, NN_weights = find_schedule(M, N, LV, GV, GAMMA, EPSILON, delta, due_dates, release_dates, R_WEIGHTS, NN_weights, PHASE, METHOD, EPOCHS, OUTPUT_DIR)
+    schedule, epoch, calc_time, RL, NN_weights = find_schedule(M, N, LV, GV, GAMMA, EPSILON, delta, due_dates, release_dates, R_WEIGHTS, NN_weights, PHASE, METHOD, EPOCHS, OUTPUT_DIR, w_pickle)
 
     makespan = schedule.Cmax
+    Tsum = schedule.Tsum
     Tmax = schedule.Tmax
     Tn = schedule.Tn
 
     plot_schedule(OUTPUT_DIR, schedule, N, LV, GV)
     # print_schedule(schedule, calc_time, MILP_schedule, MILP_objval, MILP_calctime)
-    # write_NN_weights(OUTPUT_DIR, N, LV, GV, EPSILON, NN_weights)
-    write_log(OUTPUT_DIR, N, LV, GV, GAMMA, EPSILON, METHOD, EPOCHS, makespan, Tmax, Tn, calc_time, epoch, MILP_objval, MILP_calctime)
+    write_NN_weights(OUTPUT_DIR, N, LV, GV, EPSILON, NN_weights)
+    write_log(OUTPUT_DIR, N, LV, GV, GAMMA, EPSILON, w_pickle, METHOD, EPOCHS, makespan, Tsum, Tmax, Tn, calc_time, epoch, MILP_objval, MILP_calctime)
 
     return NN_weights
 
@@ -123,31 +124,32 @@ def main():
 
     R_WEIGHTS = {
         "Cmax": 1,
-        "Tsum": 0,
+        "Tsum": 1,
         "Tmax": 0,
         "Tmean": 0,
         "Tn": 0
     }
 
-    NN_weights = np.random.rand(8)
+    NN_weights = np.random.rand(9)
 
     PHASE = "load"     # train / load
-    METHOD = "NN"     # JEPS / Q_learning / NN
+    METHOD = "JEPS"     # JEPS / Q_learning / NN
 
-    EPOCHS = 1
+    EPOCHS = 5000
     OUTPUT_DIR = '../output/'
 
     file = open(OUTPUT_DIR+"log.csv",'a')
-    file.write("METHOD,N,LV,GV,EPOCHS,GAMMA,EPSILON,MAKESPAN,TMAX,TN,TIME,EPOCH_BEST,MILP_OBJVAL,MILP_CALCTIME")
+    file.write("METHOD,N,LV,GV,EPOCHS,GAMMA,EPSILON,WEIGHTS,MAKESPAN,TSUM,TMAX,TN,TIME,EPOCH_BEST,MILP_OBJVAL,MILP_CALCTIME")
     file.close()
 
-    for N in range(1,26):
-        for LV in range(1,16):
-            for GV in range(1,6):
-                for METHOD in ["NN","JEPS"]:
-                    for EPOCHS in [1,100,1000]:
-                        print(str(N)+","+str(LV)+","+str(GV)+","+str(METHOD)+","+str(EPOCHS))
-                        NN_weights = test(M, N, LV, GV, GAMMA, EPSILON, R_WEIGHTS, NN_weights, PHASE, METHOD, EPOCHS, OUTPUT_DIR)
+    for N in range(5,16):
+        for LV in range(2,6):
+            for GV in range(1,5):
+                for w_pickle in ["5-2","5-5","10-2","10-5","15-2","15-5"]:
+                    for METHOD in ["JEPS","NN"]:
+                        for EPOCHS in [1,100,1000]:
+                            print(str(N)+","+str(LV)+","+str(GV)+","+PHASE)
+                            NN_weights = test(M, N, LV, GV, GAMMA, EPSILON, R_WEIGHTS, NN_weights, PHASE, METHOD, EPOCHS, OUTPUT_DIR, w_pickle)
     
 if __name__ == '__main__':
     main()

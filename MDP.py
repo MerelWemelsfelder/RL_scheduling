@@ -180,12 +180,13 @@ class MDP(object):
 
                     if (PHASE == "train") or (METHOD == "NN"):
                         values = []
-                        for j in a_indices:
-                            inputs = generate_NN_input(resource.i, j, resource.last_job, z, heur_job, heur_res, heur_order, N, LV, GV)
+                        for j in a_indices[:-1]:
+                            inputs = generate_NN_input(resource.i, j, self.actions[j].D, resource.last_job, z, heur_job, heur_res, heur_order, N, LV, GV)
                             values.append(self.policy_function.predict(inputs))
+                        inputs = generate_NN_input(0, N, 0, 0, z, heur_job, heur_res, heur_order, N, LV, GV)
+                        values.append(self.policy_function.predict(inputs))
+
                         j = a_indices[np.argmax(values)]
-                        self.NN_inputs.append(generate_NN_input(resource.i, j, resource.last_job, z, heur_job, heur_res, heur_order, N, LV, GV))
-                        self.NN_predictions.append(self.policy_function.predict(inputs))
                     elif (PHASE == "load") and (METHOD == "JEPS"):
                         j = a_indices[np.argmax(resource.policy[a_indices])]
                     

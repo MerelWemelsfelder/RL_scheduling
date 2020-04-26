@@ -63,14 +63,14 @@ def plot_schedule(OUTPUT_DIR, schedule, N, LV, GV):
     plt.close(fig)
 
 # Store statistics of some test iteration to log file
-def write_log(OUTPUT_DIR, N, LV, GV, GAMMA, EPSILON, METHOD, EPOCHS, makespan, Tmax, Tn, calc_time, epoch, MILP_objval, MILP_calctime):
+def write_log(OUTPUT_DIR, N, LV, GV, GAMMA, EPSILON, w_pickle, METHOD, EPOCHS, makespan, Tsum, Tmax, Tn, calc_time, epoch, MILP_objval, MILP_calctime):
     file = open(OUTPUT_DIR+"log.csv",'a')
-    file.write("\n"+METHOD+","+str(N)+","+str(LV)+","+str(GV)+","+str(EPOCHS)+","+str(GAMMA)+","+str(EPSILON)+","+str(makespan)+","+str(Tmax)+","+str(Tn)+","+str(calc_time)+","+str(epoch)+","+str(MILP_objval)+","+str(MILP_calctime))
+    file.write("\n"+METHOD+","+str(N)+","+str(LV)+","+str(GV)+","+str(EPOCHS)+","+str(GAMMA)+","+str(EPSILON)+","+w_pickle+","+str(makespan)+","+str(Tsum)+","+str(Tmax)+","+str(Tn)+","+str(calc_time)+","+str(epoch)+","+str(MILP_objval)+","+str(MILP_calctime))
     file.close()
 
 # Store the trained weights of the Neural Network, used as a policy value function
 def write_NN_weights(OUTPUT_DIR, N, LV, GV, EPSILON, NN_weights):
-    with open(OUTPUT_DIR+"NN_weights/"+str(N)+"-"+str(LV)+"-"+str(GV)+'.pickle','wb') as f:
+    with open(OUTPUT_DIR+"NN_weights/"+str(N)+"-"+str(LV)+'.pickle','wb') as f:
         pickle.dump(NN_weights, f)
 
 # Heuristic: for each resource, the time that each job costs to process
@@ -130,12 +130,14 @@ def heuristic_order(delta, N, LV, GV):
 
 # Execute the NN policy value function with stored weights
 # to initialize policy values to be used by JEPS
-def load_NN_into_JEPS(NN_weights, policies, N, LV, GV, heur_job, heur_res, heur_order):
+def load_NN_into_JEPS(NN_weights, policies, N, LV, GV, due_dates, heur_job, heur_res, heur_order):
     policy_function = NeuralNetwork(NN_weights)
 
     for i in range(LV):
-        for j in range(N+1):
-            inputs = generate_NN_input(i, j, None, 0, heur_job, heur_res, heur_order, N, LV, GV)
+        for j in range(N):
+            inputs = generate_NN_input(i, j, due_dates[j], None, 0, heur_job, heur_res, heur_order, N, LV, GV)
             policies[i][j] = policy_function.predict(inputs)
+        inputs = generate_NN_input(i, N, 0, None, 0, heur_job, heur_res, heur_order, N, LV, GV)
+        policies[i][N] = policy_function.predict(inputs)
 
     return policies
