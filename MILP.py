@@ -10,10 +10,10 @@ from plotting_functions import plot_best_schedule
 
 def MILP_instance(M, LV, GV, N):
 	plantLayout = {'q': M,
-	               'lm': [LV],
-	               'lU': [GV],
-	               'probsPlant': [],
-	               'probsBatch': [1]}
+	               'lm': LV,
+	               'lU': GV,
+	               'probsPlant': [1 for i in range(M-1)],
+	               'probsBatch': [1 for i in range(M)]}
 	n = N
 	lR = np.zeros((plantLayout['q'], n))
 	ins = instance_functions.Instance(n=n, randomSeed=2, lR=lR, **plantLayout)

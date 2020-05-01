@@ -9,7 +9,7 @@ def update_history(resources, z):
     return resources
 
 # Update all resource's policies according to JEPS
-def update_policy_JEPS(resource, states, actions, time_max, GAMMA):
+def update_policy_JEPS(resource, actions, time_max, GAMMA):
     for z in range(time_max-1):
         s = resource.h[z][0]
         a = resource.h[z][1]
@@ -17,7 +17,6 @@ def update_policy_JEPS(resource, states, actions, time_max, GAMMA):
         # Would be None if the first unit of this resource was already
         # processing a job and therefore not able to execute an action
         if a != None:
-            s_index = states.index(s)
             a_index = actions.index(a)
             for job in s:
                 if job == a:
