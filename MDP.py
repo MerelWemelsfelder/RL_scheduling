@@ -53,12 +53,15 @@ class WorkStation(object):
         if self.v == 0:
             self.resources = [resource.reset(waiting) for resource in self.resources]
         else:
-            self.resources = [resource.reset([]) for resource in self.resources]    
+            self.resources = [resource.reset([]) for resource in self.resources]   
+        
+        self.jobs_to_come = waiting.copy()
+
         return self
 
 class Resource(object):
     def __init__(self, v, i, GV, policies):
-        self.i = i                                      # index of r_i
+        self.i = i                                         # index of r_i
         self.units = [Unit(i, q) for q in range(GV[v])]    # units in resource
         self.policy = policies[v][i]                       # initialize Q-table with zeros
         
@@ -66,7 +69,7 @@ class Resource(object):
         self.units = [unit.reset(waiting) for unit in self.units]
         
         self.prev_state = None      # previous state
-        self.state = waiting        # current state (= waiting jobs)
+        self.state = waiting.copy()        # current state (= waiting jobs)
         self.last_action = None     # action that was executed most recently
         self.last_job = None        # job that was processed most recently
         self.h = dict()
@@ -107,12 +110,27 @@ class Job(object):
 
 class MDP(object):
     # INITIALIZE MDP ENVIRONMENT
-    def __init__(self, N, M, LV, GV, release_dates, due_dates, NN_weights, policies):
+    def __init__(self, N, M, LV, GV, release_dates, due_dates, NN_weights, NN_biases, NN_weights_gradients, NN_biases_gradients, policies):
         self.jobs = [Job(j, M, release_dates[j], due_dates) for j in range(N)]
         self.actions = self.jobs.copy()
         self.actions.append("do_nothing")
-        self.policy_function = NeuralNetwork(NN_weights)
         self.workstations = [WorkStation(v, LV, GV, policies) for v in range(M)]
+
+        self.NN = NeuralNetwork(
+            Dense(NN_weights[0], NN_weights_gradients[0], NN_biases[0], NN_biases_gradients[0]), 
+            ReLU(),
+            Dense(NN_weights[1], NN_weights_gradients[1], NN_biases[1], NN_biases_gradients[1]), 
+            ReLU(),
+            Dense(NN_weights[2], NN_weights_gradients[2], NN_biases[2], NN_biases_gradients[2]), 
+            ReLU(),
+            Dense(NN_weights[3], NN_weights_gradients[3], NN_biases[3], NN_biases_gradients[3]), 
+            ReLU(),
+            Dense(NN_weights[4], NN_weights_gradients[4], NN_biases[4], NN_biases_gradients[4]), 
+            # ReLU(),
+            # Dense(NN_weights[5], NN_weights_gradients[5], NN_biases[5], NN_biases_gradients[5]), 
+            # ReLU(),
+            Sigmoid())
+        self.loss = NLL()
         
     # RESET MDP ENVIRONMENT
     def reset(self, N, M, LV, GV, release_dates, due_dates):
@@ -145,8 +163,6 @@ class MDP(object):
                             if ws.v == (M-1):
                                 job.done = True 
                                 self.schedule.c[job.j] = z
-                                self.schedule.T[job.j] += max(z - self.schedule.D[ws.v][job.j], 0)
-                            else:
                                 self.schedule.T[job.j] += max(z - self.schedule.D[ws.v][job.j], 0)
                     
                     # Set unit to idle
@@ -204,20 +220,20 @@ class MDP(object):
                         if (PHASE == "train") or (METHOD == "NN"):
                             values = []
                             for j in a_indices[:-1]:
-                                inputs = generate_NN_input(ws.v, resource.i, j, self.actions[j].D, resource.last_job, z, heur_job, heur_res, heur_order, N, M, LV, GV)
-                                values.append(self.policy_function.predict(inputs))
-                            inputs = generate_NN_input(ws.v, 0, N, 0, 0, z, heur_job, heur_res, heur_order, N, M, LV, GV)
-                            values.append(self.policy_function.predict(inputs))
+                                inputs = generate_NN_input(N, M, LV, GV, ws, resource, self.actions, ws.v, resource.i, j, resource.last_job, z, heur_job, heur_res, heur_order)
+                                values.append(self.NN.forward(inputs))
+                            inputs = generate_NN_input(N, M, LV, GV, ws, resource, self.actions, ws.v, 0, N, 0, z, heur_job, heur_res, heur_order)
+                            values.append(self.NN.forward(inputs))
 
                             j = a_indices[np.argmax(values)]
 
                             if j == N:
-                                inputs = generate_NN_input(ws.v, 0, N, 0, 0, z, heur_job, heur_res, heur_order, N, M, LV, GV)
+                                inputs = generate_NN_input(N, M, LV, GV, ws, resource, self.actions, ws.v, 0, N, 0, z, heur_job, heur_res, heur_order)
                             else:
-                                inputs = generate_NN_input(ws.v, resource.i, j, self.actions[j].D, resource.last_job, z, heur_job, heur_res, heur_order, N, M, LV, GV)
+                                inputs = generate_NN_input(N, M, LV, GV, ws, resource, self.actions, ws.v, resource.i, j, resource.last_job, z, heur_job, heur_res, heur_order)
                             self.NN_inputs.append(inputs)
-                            self.NN_predictions.append(self.policy_function.predict(inputs))
-                            
+                            self.NN_predictions.append(self.NN.forward(inputs))
+
                         elif (PHASE == "load") and (METHOD == "JEPS"):
                             j = a_indices[np.argmax(resource.policy[a_indices])]
                         
@@ -230,6 +246,9 @@ class MDP(object):
                         for u in first_units:
                             u.state.remove(job)                  # remove job from all waiting lists
                         unit.processing = job                   # set unit to processing job
+
+                        if job in ws.jobs_to_come:
+                            ws.jobs_to_come.remove(job)
 
                         if ws.v == 0:
                             self.schedule.t[job.j] = z                      # add starting time job j

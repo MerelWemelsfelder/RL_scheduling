@@ -31,17 +31,19 @@ def print_schedule(schedule, calc_time, MILP_schedule, MILP_objval, MILP_calctim
 
 # Make a pretty plot of the found schedule and save it as a png
 def plot_schedule(OUTPUT_DIR, schedule, N, M, LV, GV):
+    lv = max(LV)
+    gv = max(GV)
 
     fig, gnt = plt.subplots() 
-    gnt.set_ylim(0, LV*GV*10)
+    gnt.set_ylim(0, lv*gv*10)
     gnt.set_xlim(0, max(schedule.c))
     gnt.set_xlabel('time') 
     gnt.set_ylabel('resources ri, units uq')
       
-    gnt.set_yticks(list(range(5,LV*GV*10,10)))
+    gnt.set_yticks(list(range(5,lv*gv*10,10)))
     y_labels = []
-    for i in range(LV):
-        for q in range(GV):
+    for i in range(lv):
+        for q in range(gv):
             y_labels.append("r"+str(i)+", u"+str(q))
     gnt.set_yticklabels(y_labels) 
 
@@ -49,14 +51,14 @@ def plot_schedule(OUTPUT_DIR, schedule, N, M, LV, GV):
     legend_names = ["job "+str(j) for j in range(N)]
 
     for v in range(M):
-        for i in range(LV):
-            for j in schedule.schedule[i]:
+        for i in range(LV[v]):
+            for j in schedule.schedule[v][i]:
                 color = (random.random(), random.random(), random.random())
                 legend_colors[j] = Line2D([0], [0], color=color, lw=4)
-                for q in range(GV):
-                    start = schedule.t_q[j][v][q]
-                    duration = schedule.c_q[j][v][q] - schedule.t_q[j][v][q]
-                    y_position = (10*i*GV)+(10*q)
+                for q in range(GV[v]):
+                    start = schedule.t_q[v][j][q]
+                    duration = schedule.c_q[v][j][q] - schedule.t_q[v][j][q]
+                    y_position = (10*i*GV[v])+(10*q)
                     gnt.broken_barh([(start, duration)], (y_position, 9), facecolors = color)
 
     gnt.legend(legend_colors, legend_names)
@@ -64,15 +66,21 @@ def plot_schedule(OUTPUT_DIR, schedule, N, M, LV, GV):
     plt.close(fig)
 
 # Store statistics of some test iteration to log file
-def write_log(OUTPUT_DIR, N, M, LV, GV, GAMMA, EPSILON, METHOD, EPOCHS, makespan, Tsum, Tmax, Tn, calc_time, epoch, MILP_objval, MILP_calctime):
+def write_log(OUTPUT_DIR, N, M, LV, GV, GAMMA, EPSILON, layer_dims, NN_weights, NN_biases, METHOD, EPOCHS, makespan, Tsum, Tmax, Tn, calc_time, epoch, MILP_objval, MILP_calctime):
     file = open(OUTPUT_DIR+"log.csv",'a')
-    file.write("\n"+METHOD+","+str(N)+","+str(M)+","+str(LV[0])+","+str(GV[0])+","+str(EPOCHS)+","+str(GAMMA)+","+str(EPSILON)+","+str(makespan)+","+str(Tsum)+","+str(Tmax)+","+str(Tn)+","+str(calc_time)+","+str(epoch)+","+str(MILP_objval)+","+str(MILP_calctime))
+    file.write("\n"+METHOD+"\t"+str(N)+"\t"+str(M)+"\t"+str(LV[0])+"\t"+str(GV[0])+"\t"+str(EPOCHS)+"\t"+str(GAMMA)+"\t"+str(round(EPSILON,2))+"\t"+str(layer_dims)+"\t"+str(makespan)+"\t"+str(Tsum)+"\t"+str(Tmax)+"\t"+str(Tn)+"\t"+str(calc_time)+"\t"+str(epoch)+"\t"+str(MILP_objval)+"\t"+str(MILP_calctime))
     file.close()
 
 # Store the trained weights of the Neural Network, used as a policy value function
-def write_NN_weights(OUTPUT_DIR, N, LV, GV, EPSILON, NN_weights):
-    with open(OUTPUT_DIR+"NN_weights/"+str(N)+"-"+str(LV)+'.pickle','wb') as f:
+def write_NN_weights(OUTPUT_DIR, M, N, LV, GV, EPSILON, layer_dims, NN_weights, NN_biases, NN_weights_gradients, NN_biases_gradients):
+    with open(OUTPUT_DIR+"NN_weights/"+str(M)+"_"+str(layer_dims)+"NN_weights.pickle",'wb') as f:
         pickle.dump(NN_weights, f)
+    with open(OUTPUT_DIR+"NN_weights/"+str(M)+"_"+str(layer_dims)+"NN_biases.pickle",'wb') as f:
+        pickle.dump(NN_biases, f)
+    with open(OUTPUT_DIR+"NN_weights/"+str(M)+"_"+str(layer_dims)+"NN_weights_gradients.pickle",'wb') as f:
+        pickle.dump(NN_weights_gradients, f)
+    with open(OUTPUT_DIR+"NN_weights/"+str(M)+"_"+str(layer_dims)+"NN_biases_gradients.pickle",'wb') as f:
+        pickle.dump(NN_biases_gradients, f)
 
 # Heuristic: for each resource in each work station, the time that each job costs to process
 def heuristic_best_job(deltas, N, M, LV, GV):
@@ -93,17 +101,16 @@ def heuristic_best_job(deltas, N, M, LV, GV):
     return heur_job
 
 # Heuristic: for each job, the time it costs for each resource if processed on it
-def heuristic_best_resource(heur_j):
+def heuristic_best_resource(heur_j, N, M, LV):
     heur_r = dict()
-    for j in heur_j[0][0].keys():
+    for j in range(N):
         dict_j = dict()
-        for v in heur_j.keys():
+        for v in range(M):
             dict_v = dict()
-            for i in heur_j[0].keys():
+            for i in range(LV[v]):
                 dict_v[i] = heur_j[v][i][j]
             dict_j[v] = dict_v
         heur_r[j] = dict_j
-        # heur_r[j][v][i]
     return heur_r
 
 # Heuristic: For each resource, the blocking that occurs as a result
@@ -143,15 +150,17 @@ def heuristic_order(deltas, N, M, LV, GV):
 
 # Execute the NN policy value function with stored weights
 # to initialize policy values to be used by JEPS
-def load_NN_into_JEPS(NN_weights, policies, N, M, LV, GV, due_dates, heur_job, heur_res, heur_order):
-    policy_function = NeuralNetwork(NN_weights)
+def load_NN_into_JEPS(NN_weights, NN_biases, policies, N, M, LV, GV, due_dates, heur_job, heur_res, heur_order):
+    policy_function = NN(Dense(10, 4, NN_weights[0], NN_biases[0]), ReLU(),Dense(4, 1, NN_weights[1], NN_biases[1]),Sigmoid())
 
     for v in range(M):
-        for i in range(LV):
+        for i in range(LV[v]):
             for j in range(N):
-                inputs = generate_NN_input(v, i, j, due_dates[j], None, 0, heur_job, heur_res, heur_order, N, M, LV, GV)
-                policies[v][i][j] = policy_function.predict(inputs)
-            inputs = generate_NN_input(v, i, N, 0, None, 0, heur_job, heur_res, heur_order, N, M, LV, GV)
-            policies[v][i][N] = policy_function.predict(inputs)
+                due_dates_j = [d[j] for d in due_dates]
+
+                inputs = generate_NN_input(v, i, j, due_dates_j, None, 0, heur_job, heur_res, heur_order, N, M, LV, GV)
+                policies[v][i][j] = policy_function.forward(inputs)
+            inputs = generate_NN_input(v, i, N, [0 for v in range(M)], None, 0, heur_job, heur_res, heur_order, N, M, LV, GV)
+            policies[v][i][N] = policy_function.forward(inputs)
 
     return policies

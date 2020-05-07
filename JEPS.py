@@ -10,7 +10,7 @@ def update_history(resources, z):
 
 # Update all resource's policies according to JEPS
 def update_policy_JEPS(resource, actions, time_max, GAMMA):
-    for z in range(time_max-1):
+    for z in resource.h.keys():
         s = resource.h[z][0]
         a = resource.h[z][1]
 
