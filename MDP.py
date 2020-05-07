@@ -50,11 +50,7 @@ class WorkStation(object):
         self.resources = [Resource(v, i, GV, policies) for i in range(LV[v])]     # units in resource
         
     def reset(self, waiting):
-        if self.v == 0:
-            self.resources = [resource.reset(waiting) for resource in self.resources]
-        else:
-            self.resources = [resource.reset([]) for resource in self.resources]   
-        
+        self.resources = [resource.reset(waiting) for resource in self.resources]
         self.jobs_to_come = waiting.copy()
 
         return self
@@ -62,7 +58,7 @@ class WorkStation(object):
 class Resource(object):
     def __init__(self, v, i, GV, policies):
         self.i = i                                         # index of r_i
-        self.units = [Unit(i, q) for q in range(GV[v])]    # units in resource
+        self.units = [Unit(v, i, q) for q in range(GV[v])]    # units in resource
         self.policy = policies[v][i]                       # initialize Q-table with zeros
         
     def reset(self, waiting):
@@ -77,7 +73,8 @@ class Resource(object):
         return self
 
 class Unit(object):
-    def __init__(self, i, q):
+    def __init__(self, v, i, q):
+        self.v = v
         self.i = i              # resource index of r_i
         self.q = q              # unit index of u_iq
 
@@ -87,7 +84,7 @@ class Unit(object):
         self.c_idle = None      # time of becoming idle after job completion
         
         # state of unit = jobs waiting to be processed on unit
-        if self.q == 0:
+        if self.v == 0 and self.q == 0:
             self.state = waiting.copy()
         else:
             self.state = []
@@ -122,10 +119,10 @@ class MDP(object):
             Dense(NN_weights[1], NN_weights_gradients[1], NN_biases[1], NN_biases_gradients[1]), 
             ReLU(),
             Dense(NN_weights[2], NN_weights_gradients[2], NN_biases[2], NN_biases_gradients[2]), 
-            ReLU(),
-            Dense(NN_weights[3], NN_weights_gradients[3], NN_biases[3], NN_biases_gradients[3]), 
-            ReLU(),
-            Dense(NN_weights[4], NN_weights_gradients[4], NN_biases[4], NN_biases_gradients[4]), 
+            # ReLU(),
+            # Dense(NN_weights[3], NN_weights_gradients[3], NN_biases[3], NN_biases_gradients[3]), 
+            # ReLU(),
+            # Dense(NN_weights[4], NN_weights_gradients[4], NN_biases[4], NN_biases_gradients[4]), 
             # ReLU(),
             # Dense(NN_weights[5], NN_weights_gradients[5], NN_biases[5], NN_biases_gradients[5]), 
             # ReLU(),
@@ -204,14 +201,14 @@ class MDP(object):
             for unit in first_units:
                 resource = ws.resources[unit.i]
                 
-                if unit.processing == None:
+                if unit.processing == None and len(unit.state) > 0:
                     waiting = unit.state.copy()
-                    actions = waiting.copy()
-                    actions.append("do_nothing")
                     
                     # choose random action with probability EPSILON,
                     # otherwise choose action with highest policy value
                     if random.uniform(0, 1) < EPSILON:
+                        actions = waiting.copy()
+                        actions.append("do_nothing")
                         job = random.sample(actions, 1)[0]
                     else:
                         a_indices = [job.j for job in waiting]
@@ -227,24 +224,24 @@ class MDP(object):
 
                             j = a_indices[np.argmax(values)]
 
-                            if j == N:
-                                inputs = generate_NN_input(N, M, LV, GV, ws, resource, self.actions, ws.v, 0, N, 0, z, heur_job, heur_res, heur_order)
-                            else:
-                                inputs = generate_NN_input(N, M, LV, GV, ws, resource, self.actions, ws.v, resource.i, j, resource.last_job, z, heur_job, heur_res, heur_order)
-                            self.NN_inputs.append(inputs)
-                            self.NN_predictions.append(self.NN.forward(inputs))
-
                         elif (PHASE == "load") and (METHOD == "JEPS"):
                             j = a_indices[np.argmax(resource.policy[a_indices])]
                         
                         job = self.actions[j]
+
+                    if job == "do_nothing":
+                        inputs = generate_NN_input(N, M, LV, GV, ws, resource, self.actions, ws.v, 0, N, 0, z, heur_job, heur_res, heur_order)
+                    else:
+                        inputs = generate_NN_input(N, M, LV, GV, ws, resource, self.actions, ws.v, resource.i, job.j, resource.last_job, z, heur_job, heur_res, heur_order)
+                    self.NN_inputs.append(inputs)
+                    self.NN_predictions.append(self.NN.forward(inputs))
 
                     resource.last_action = job                  # update last executed action
                     if job != "do_nothing":
                         resource.last_job = job                 # update last processed job
 
                         for u in first_units:
-                            u.state.remove(job)                  # remove job from all waiting lists
+                            u.state.remove(job)                 # remove job from all waiting lists
                         unit.processing = job                   # set unit to processing job
 
                         if job in ws.jobs_to_come:

@@ -200,10 +200,8 @@ class SGD(object):
             np.subtract(w, update, out=w)
 
 # model = RL.NN, X_train = RL.NN_inputs
-def update_NN(model, X_train, y_pred, weight_decay, loss, r, r_best):
+def update_NN(model, X_train, y_pred, weight_decay, lr, loss, r, r_best):
     
-    sgd = SGD(model, lr=0.1, weight_decay=weight_decay)
-
     # y_pred = model.forward(X_train)
     score = (r_best-r)/min(r_best, r)
     y_true = y_pred + (score * y_pred)
@@ -214,6 +212,7 @@ def update_NN(model, X_train, y_pred, weight_decay, loss, r, r_best):
     for i in range(len(X_train)):
         model.backward(X_train[i], loss_grad[i])
 
+    sgd = SGD(model, lr=lr, weight_decay=weight_decay)
     sgd.update_params()
     return sgd.model
 
