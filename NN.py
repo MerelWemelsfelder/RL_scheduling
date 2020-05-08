@@ -147,12 +147,8 @@ class NeuralNetwork(object):
 class NLL(object):
 
     def nll_forward(self, target_pred, target_true):
-        target_pred *= 0.99999999
-        target_true *= 0.99999999
-
-        # for t in target_pred:
-        #     if math.isnan(t[0]):
-        #         print(t)
+        target_pred += 0.000000001
+        target_true += 0.000000001
 
         part1 = np.dot(np.transpose(target_true),np.log(target_pred))
         part2 = np.dot(np.transpose(1 - target_true), np.log(1 - target_pred))
@@ -258,7 +254,9 @@ def generate_NN_input(N, M, LV, GV, ws, resource, jobs, v, i, j, o, z, heur_job,
                 times.append(heur_job[v][i][j])
             else:
                 times.append((unit.c_idle - z) + heur_job[v][i][j])
-        proctime_resource = (processing_time-np.mean(times))/np.std(times)
+        proctime_resource = processing_time - np.mean(times)
+        if np.std(times) != 0:
+            proctime_resource /= np.std(times)
 
 
         # expected tardiness of job if processing starts now
@@ -273,6 +271,11 @@ def generate_NN_input(N, M, LV, GV, ws, resource, jobs, v, i, j, o, z, heur_job,
         else:
             blocking = heur_order[v][i][j][o.j]
 
-    inputs = [(v+1)/M, T_expected, relative_time_to_duedate, proctime_job, proctime_resource, blocking, idle_action]
+    # (v+1)/M, proctime_job, idle_action
+    inputs = [T_expected, relative_time_to_duedate, proctime_resource, blocking]
+
+    for i in inputs:
+        if math.isnan(i):
+            print(inputs)
 
     return inputs
