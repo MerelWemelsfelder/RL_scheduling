@@ -10,7 +10,7 @@ from MILP import *
 from NN import *
 from utils import *
 
-def find_schedule(return_dict, N, M, LV, GV, GAMMA, EPSILON, deltas, due_dates, release_dates, R_WEIGHTS, layer_dims, weight_decay, lr, NN_weights, NN_biases, NN_weights_gradients, NN_biases_gradients, PHASE, METHOD, EPOCHS, OUTPUT_DIR, TIMEOUT):
+def find_schedule(return_dict, N, M, LV, GV, GAMMA, EPSILON, deltas, due_dates, release_dates, OBJ_FUN, layer_dims, weight_decay, lr, NN_weights, NN_biases, NN_weights_gradients, NN_biases_gradients, PHASE, METHOD, EPOCHS, OUTPUT_DIR, TIMEOUT):
     
     timer_start = time.time()
 
@@ -47,7 +47,7 @@ def find_schedule(return_dict, N, M, LV, GV, GAMMA, EPSILON, deltas, due_dates, 
         RL, DONE = RL.step(z, N, M, LV, GV, GAMMA, EPSILON, deltas, heur_job, heur_res, heur_order, PHASE, METHOD)
         z += 1
     schedule = RL.schedule.objectives()
-    r_best = schedule.calc_reward(R_WEIGHTS)
+    r_best = schedule.calc_reward(OBJ_FUN)
     best_params = RL.NN.get_params()
     best_params_grad = RL.NN.get_params_gradients()
 
@@ -68,7 +68,7 @@ def find_schedule(return_dict, N, M, LV, GV, GAMMA, EPSILON, deltas, due_dates, 
 
         # Load the resulting schedule and its objective value
         schedule = RL.schedule.objectives()
-        r = schedule.calc_reward(R_WEIGHTS)
+        r = schedule.calc_reward(OBJ_FUN)
 
         # Update the weighs of the policy value function
         if PHASE == "train":
@@ -103,7 +103,7 @@ def find_schedule(return_dict, N, M, LV, GV, GAMMA, EPSILON, deltas, due_dates, 
     return_dict["mdp"] = RL
 
 # Test function, which executes the both the MILP and the NN/JEPS algorithm, and stores all relevant information
-def test(N, M, LV, GV, GAMMA, EPSILON, R_WEIGHTS, layer_dims, weight_decay, lr, NN_weights, NN_biases, NN_weights_gradients, NN_biases_gradients, PHASE, METHOD, EPOCHS, OUTPUT_DIR, TIMEOUT):
+def test(N, M, LV, GV, GAMMA, EPSILON, OBJ_FUN, layer_dims, weight_decay, lr, NN_weights, NN_biases, NN_weights_gradients, NN_biases_gradients, PHASE, METHOD, EPOCHS, OUTPUT_DIR, TIMEOUT):
     
     ins = MILP_instance(M, LV, GV, N)
     MILP_objval = 0
@@ -127,7 +127,7 @@ def test(N, M, LV, GV, GAMMA, EPSILON, R_WEIGHTS, layer_dims, weight_decay, lr, 
     # return_dict["epoch_best_found"] = 0
     # return_dict["time"] = TIMEOUT
     # return_dict["mdp"] = None
-    p = multiprocessing.Process(target=find_schedule, args=(return_dict, N, M, LV, GV, GAMMA, EPSILON, deltas, due_dates, release_dates, R_WEIGHTS, layer_dims, weight_decay, lr, NN_weights, NN_biases, NN_weights_gradients, NN_biases_gradients, PHASE, METHOD, EPOCHS, OUTPUT_DIR, TIMEOUT))
+    p = multiprocessing.Process(target=find_schedule, args=(return_dict, N, M, LV, GV, GAMMA, EPSILON, deltas, due_dates, release_dates, OBJ_FUN, layer_dims, weight_decay, lr, NN_weights, NN_biases, NN_weights_gradients, NN_biases_gradients, PHASE, METHOD, EPOCHS, OUTPUT_DIR, TIMEOUT))
     p.start()
     p.join(TIMEOUT)
     if p.is_alive():
@@ -155,8 +155,8 @@ def test(N, M, LV, GV, GAMMA, EPSILON, R_WEIGHTS, layer_dims, weight_decay, lr, 
 
         plot_schedule(OUTPUT_DIR, schedule, N, M, LV, GV)
         # print_schedule(schedule, calc_time, MILP_schedule, MILP_objval, MILP_calctime)
-        write_NN_weights(OUTPUT_DIR, M, N, LV, GV, EPSILON, layer_dims, NN_weights, NN_biases, NN_weights_gradients, NN_biases_gradients)
-        write_log(OUTPUT_DIR, N, M, LV, GV, GAMMA, EPSILON, layer_dims, weight_decay, lr, METHOD, EPOCHS, makespan, Tsum, Tmax, Tn, calc_time, epoch_best_found, MILP_objval, MILP_calctime)
+        write_NN_weights(OUTPUT_DIR, M, N, LV, GV, EPSILON, layer_dims, OBJ_FUN, NN_weights, NN_biases, NN_weights_gradients, NN_biases_gradients)
+        write_log(OUTPUT_DIR, N, M, LV, GV, GAMMA, EPSILON, layer_dims, weight_decay, lr, METHOD, EPOCHS, OBJ_FUN, makespan, Tsum, Tmax, Tn, calc_time, epoch_best_found, MILP_objval, MILP_calctime)
 
 def main():
     N = 15         # number of jobs
@@ -168,7 +168,7 @@ def main():
     GAMMA = 0.8     # learning rate (0<γ≤1): the extent to which Q-values are updated every timestep / epoch
     EPSILON = 0.9   # probability of choosing a random action (= exploring)
 
-    R_WEIGHTS = {
+    OBJ_FUN = {
         "Cmax": 1,
         "Tsum": 10,
         "Tmax": 0,
@@ -176,7 +176,7 @@ def main():
         "Tn": 0
     }
 
-    layer_dims = [4,9,6,1]
+    layer_dims = [4,9,11,6,4,1]
     NN_weights = [np.random.rand(layer_dims[i], layer_dims[i+1]) for i in range(len(layer_dims)-1)]
     NN_biases = [np.zeros(layer_dims[i]) for i in range(1,len(layer_dims))]
     NN_weights_gradients = np.zeros_like(NN_weights)
@@ -193,7 +193,7 @@ def main():
     OUTPUT_DIR = '../output/'
 
     file = open(OUTPUT_DIR+"log.csv",'a')
-    file.write("METHOD\tN\tM\tLV\tGV\tEPOCHS\tGAMMA\tEPSILON\tLAYER_DIMS\tWEIGHT_DECAY\tLR\tMAKESPAN\tTSUM\tTMAX\tTN\tTIME\tEPOCH_BEST\tMILP_OBJVAL\tMILP_CALCTIME")
+    file.write("METHOD\tN\tM\tLV\tGV\tEPOCHS\tGAMMA\tEPSILON\tLAYER_DIMS\tWEIGHT_DECAY\tLR\tCMAX_WEIGHT\tTSUM_WEIGHT\tMAKESPAN\tTSUM\tTMAX\tTN\tTIME\tEPOCH_BEST\tMILP_OBJVAL\tMILP_CALCTIME")
     file.close()
 
     # layer_dims = [12,3,5,21,18]
@@ -206,10 +206,13 @@ def main():
     #         NN_weights_gradients = np.zeros_like(NN_weights)
     #         NN_biases_gradients = np.zeros_like(NN_biases)
 
-    for N in range(9,21):
-        for LV in range(3,7):
-            for GV in range(3,7):
-                test(N, M, [LV], [GV], GAMMA, EPSILON, R_WEIGHTS, layer_dims, weight_decay, lr, NN_weights, NN_biases, NN_weights_gradients, NN_biases_gradients, PHASE, METHOD, EPOCHS, OUTPUT_DIR, TIMEOUT)
+    for N in range(14,26):
+        for LV in range(4,11):
+            for GV in range(4,11):
+                for weights in [[1,0],[0,1],[1,10],[1,100]]:
+                    OBJ_FUN["Cmax"] = weights[0]
+                    OBJ_FUN["Tsum"] = weights[1]
+                    test(N, M, [LV], [GV], GAMMA, EPSILON, OBJ_FUN, layer_dims, weight_decay, lr, NN_weights, NN_biases, NN_weights_gradients, NN_biases_gradients, PHASE, METHOD, EPOCHS, OUTPUT_DIR, TIMEOUT)
     
 if __name__ == '__main__':
     main()

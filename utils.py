@@ -66,20 +66,20 @@ def plot_schedule(OUTPUT_DIR, schedule, N, M, LV, GV):
     plt.close(fig)
 
 # Store statistics of some test iteration to log file
-def write_log(OUTPUT_DIR, N, M, LV, GV, GAMMA, EPSILON, layer_dims, weight_decay, lr, METHOD, EPOCHS, makespan, Tsum, Tmax, Tn, calc_time, epoch, MILP_objval, MILP_calctime):
+def write_log(OUTPUT_DIR, N, M, LV, GV, GAMMA, EPSILON, layer_dims, weight_decay, lr, METHOD, EPOCHS, OBJ_FUN, makespan, Tsum, Tmax, Tn, calc_time, epoch, MILP_objval, MILP_calctime):
     file = open(OUTPUT_DIR+"log.csv",'a')
-    file.write("\n"+METHOD+"\t"+str(N)+"\t"+str(M)+"\t"+str(LV[0])+"\t"+str(GV[0])+"\t"+str(EPOCHS)+"\t"+str(GAMMA)+"\t"+str(round(EPSILON,2))+"\t"+str(layer_dims)+"\t"+str(weight_decay)+"\t"+str(lr)+"\t"+str(makespan)+"\t"+str(Tsum)+"\t"+str(Tmax)+"\t"+str(Tn)+"\t"+str(calc_time)+"\t"+str(epoch)+"\t"+str(MILP_objval)+"\t"+str(MILP_calctime))
+    file.write("\n"+METHOD+"\t"+str(N)+"\t"+str(M)+"\t"+str(LV[0])+"\t"+str(GV[0])+"\t"+str(EPOCHS)+"\t"+str(GAMMA)+"\t"+str(round(EPSILON,2))+"\t"+str(layer_dims)+"\t"+str(weight_decay)+"\t"+str(lr)+"\t"+str(OBJ_FUN["Cmax"])+"\t"+str(OBJ_FUN["Tsum"])+"\t"+str(lr)+"\t"+str(makespan)+"\t"+str(Tsum)+"\t"+str(Tmax)+"\t"+str(Tn)+"\t"+str(calc_time)+"\t"+str(epoch)+"\t"+str(MILP_objval)+"\t"+str(MILP_calctime))
     file.close()
 
 # Store the trained weights of the Neural Network, used as a policy value function
-def write_NN_weights(OUTPUT_DIR, M, N, LV, GV, EPSILON, layer_dims, NN_weights, NN_biases, NN_weights_gradients, NN_biases_gradients):
-    with open(OUTPUT_DIR+"NN_weights/"+str(M)+"_"+str(layer_dims)+"NN_weights.pickle",'wb') as f:
+def write_NN_weights(OUTPUT_DIR, M, N, LV, GV, EPSILON, layer_dims, OBJ_FUN, NN_weights, NN_biases, NN_weights_gradients, NN_biases_gradients):
+    with open(OUTPUT_DIR+"NN_weights/"+str(layer_dims)+"-"+str(N)+"_"+str(LV)+"-"+str(OBJ_FUN["Cmax"])+"_"+str(OBJ_FUN["Tsum"])+"-"+"weights.pickle",'wb') as f:
         pickle.dump(NN_weights, f)
-    with open(OUTPUT_DIR+"NN_weights/"+str(M)+"_"+str(layer_dims)+"NN_biases.pickle",'wb') as f:
+    with open(OUTPUT_DIR+"NN_weights/"+str(layer_dims)+"-"+str(N)+"_"+str(LV)+"-"+str(OBJ_FUN["Cmax"])+"_"+str(OBJ_FUN["Tsum"])+"-"+"biases.pickle",'wb') as f:
         pickle.dump(NN_biases, f)
-    with open(OUTPUT_DIR+"NN_weights/"+str(M)+"_"+str(layer_dims)+"NN_weights_gradients.pickle",'wb') as f:
+    with open(OUTPUT_DIR+"NN_weights/"+str(layer_dims)+"-"+str(N)+"_"+str(LV)+"-"+str(OBJ_FUN["Cmax"])+"_"+str(OBJ_FUN["Tsum"])+"-"+"weights_grad.pickle",'wb') as f:
         pickle.dump(NN_weights_gradients, f)
-    with open(OUTPUT_DIR+"NN_weights/"+str(M)+"_"+str(layer_dims)+"NN_biases_gradients.pickle",'wb') as f:
+    with open(OUTPUT_DIR+"NN_weights/"+str(layer_dims)+"-"+str(N)+"_"+str(LV)+"-"+str(OBJ_FUN["Cmax"])+"_"+str(OBJ_FUN["Tsum"])+"-"+"biases_grad.pickle",'wb') as f:
         pickle.dump(NN_biases_gradients, f)
 
 # Heuristic: for each resource in each work station, the time that each job costs to process

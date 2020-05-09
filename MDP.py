@@ -34,13 +34,13 @@ class Schedule(object):
 
         return self
 
-    def calc_reward(self, R_WEIGHTS):
+    def calc_reward(self, OBJ_FUN):
         r = 0
-        r += R_WEIGHTS["Cmax"] * self.Cmax
-        r += R_WEIGHTS["Tsum"] * self.Tsum
-        r += R_WEIGHTS["Tmax"] * self.Tmax
-        r += R_WEIGHTS["Tmean"] * self.Tmean
-        r += R_WEIGHTS["Tn"] * self.Tn
+        r += OBJ_FUN["Cmax"] * self.Cmax
+        r += OBJ_FUN["Tsum"] * self.Tsum
+        r += OBJ_FUN["Tmax"] * self.Tmax
+        r += OBJ_FUN["Tmean"] * self.Tmean
+        r += OBJ_FUN["Tn"] * self.Tn
 
         return r
 
@@ -119,10 +119,10 @@ class MDP(object):
             Dense(NN_weights[1], NN_weights_gradients[1], NN_biases[1], NN_biases_gradients[1]), 
             ReLU(),
             Dense(NN_weights[2], NN_weights_gradients[2], NN_biases[2], NN_biases_gradients[2]), 
-            # ReLU(),
-            # Dense(NN_weights[3], NN_weights_gradients[3], NN_biases[3], NN_biases_gradients[3]), 
-            # ReLU(),
-            # Dense(NN_weights[4], NN_weights_gradients[4], NN_biases[4], NN_biases_gradients[4]), 
+            ReLU(),
+            Dense(NN_weights[3], NN_weights_gradients[3], NN_biases[3], NN_biases_gradients[3]), 
+            ReLU(),
+            Dense(NN_weights[4], NN_weights_gradients[4], NN_biases[4], NN_biases_gradients[4]), 
             # ReLU(),
             # Dense(NN_weights[5], NN_weights_gradients[5], NN_biases[5], NN_biases_gradients[5]), 
             # ReLU(),
