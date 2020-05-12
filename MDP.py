@@ -117,12 +117,12 @@ class MDP(object):
             Dense(NN_weights[0], NN_weights_gradients[0], NN_biases[0], NN_biases_gradients[0]), 
             ReLU(),
             Dense(NN_weights[1], NN_weights_gradients[1], NN_biases[1], NN_biases_gradients[1]), 
-            ReLU(),
-            Dense(NN_weights[2], NN_weights_gradients[2], NN_biases[2], NN_biases_gradients[2]), 
-            ReLU(),
-            Dense(NN_weights[3], NN_weights_gradients[3], NN_biases[3], NN_biases_gradients[3]), 
-            ReLU(),
-            Dense(NN_weights[4], NN_weights_gradients[4], NN_biases[4], NN_biases_gradients[4]), 
+            # ReLU(),
+            # Dense(NN_weights[2], NN_weights_gradients[2], NN_biases[2], NN_biases_gradients[2]), 
+            # ReLU(),
+            # Dense(NN_weights[3], NN_weights_gradients[3], NN_biases[3], NN_biases_gradients[3]), 
+            # ReLU(),
+            # Dense(NN_weights[4], NN_weights_gradients[4], NN_biases[4], NN_biases_gradients[4]), 
             # ReLU(),
             # Dense(NN_weights[5], NN_weights_gradients[5], NN_biases[5], NN_biases_gradients[5]), 
             # ReLU(),
@@ -217,9 +217,9 @@ class MDP(object):
                         if (PHASE == "train") or (METHOD == "NN"):
                             values = []
                             for j in a_indices[:-1]:
-                                inputs = generate_NN_input(N, M, LV, GV, ws, resource, self.actions, ws.v, resource.i, j, resource.last_job, z, heur_job, heur_res, heur_order)
+                                inputs = generate_NN_input(N, M, LV, GV, ws, resource, self.jobs, ws.v, resource.i, j, z, heur_job, heur_res, heur_order, deltas)
                                 values.append(self.NN.forward(inputs))
-                            inputs = generate_NN_input(N, M, LV, GV, ws, resource, self.actions, ws.v, 0, N, 0, z, heur_job, heur_res, heur_order)
+                            inputs = generate_NN_input(N, M, LV, GV, ws, resource, self.jobs, ws.v, 0, N, z, heur_job, heur_res, heur_order, deltas)
                             values.append(self.NN.forward(inputs))
 
                             j = a_indices[np.argmax(values)]
@@ -230,9 +230,9 @@ class MDP(object):
                         job = self.actions[j]
 
                     if job == "do_nothing":
-                        inputs = generate_NN_input(N, M, LV, GV, ws, resource, self.actions, ws.v, 0, N, 0, z, heur_job, heur_res, heur_order)
+                        inputs = generate_NN_input(N, M, LV, GV, ws, resource, self.jobs, ws.v, 0, N, z, heur_job, heur_res, heur_order, deltas)
                     else:
-                        inputs = generate_NN_input(N, M, LV, GV, ws, resource, self.actions, ws.v, resource.i, job.j, resource.last_job, z, heur_job, heur_res, heur_order)
+                        inputs = generate_NN_input(N, M, LV, GV, ws, resource, self.jobs, ws.v, resource.i, job.j, z, heur_job, heur_res, heur_order, deltas)
                     self.NN_inputs.append(inputs)
                     self.NN_predictions.append(self.NN.forward(inputs))
 

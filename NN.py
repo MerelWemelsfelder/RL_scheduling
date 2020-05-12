@@ -147,6 +147,8 @@ class NeuralNetwork(object):
 class NLL(object):
 
     def nll_forward(self, target_pred, target_true):
+        target_pred += 0.00001
+        target_true += 0.00001
         target_pred *= 0.99999
         target_true *= 0.99999
 
@@ -175,7 +177,6 @@ class NLL(object):
         return self.nll_grad_input(target_pred, target_true)
 
 def l2_regularizer(weight_decay, weights):
-    print(weights)
     w = np.sum(weights*weights)
     output = (w*weight_decay)/2   
     return output
@@ -215,68 +216,221 @@ def update_NN(model, X_train, y_pred, weight_decay, lr, loss, r, r_best):
 
 
 # Generate the input vector for value prediction by the Neural Network
-def generate_NN_input(N, M, LV, GV, ws, resource, jobs, v, i, j, o, z, heur_job, heur_res, heur_order):
+def generate_NN_input(N, M, LV, GV, ws, resource, jobs, v, i, j, z, heur_job, heur_res, heur_order, deltas):
+
+    already_processing = 0
+    for q in range(GV[v]):
+        if resource.units[q].processing != None:
+            already_processing += 1
 
     # if the chosen action is the idle action "do_nothing"
     if j == N:
-        due_dates = [0 for v in range(M)]
-        idle_action = 1
-        proctime_job = 0
-        proctime_resource = 0
-        T_expected = 0
-        relative_time_to_duedate = 0
+        time_res_minmax = 0
+        time_res_stdev = 0
+        time_res_stdev_occupied = 0
+        time_res_stdev_blocking = 0
+        time_res_stdev_occ_block = 0
+        time_job_minmax = 0
+        time_job_minmax_coming = 0
+        time_job_stdev_all = 0
+        time_job_stdev_coming = 0
+        time_job_stdev_blocking_all = 0
+        time_job_stdev_blocking_coming = 0
+        blocking_res_stdev = 0
+        blocking_job_all_stdev = 0
+        blocking_job_coming_stdev = 0
         blocking = 0
-    # if the chosen action is a waiting job
+        future_blockings_mean = 0
+        future_blockings_median = 0
+        u0_occupied = 0
+        T_expected = 0
+        time_to_duedate = 0
+        relative_duedate = 0
+        idle_action = 1
+
     else:
-        # how long does the job take to process on this resource
-        processing_time = heur_job[v][i][j]
-        # due dates of job j on all work stations
-        due_dates = jobs[j].D
-        idle_action = 0
+        ### PROCESSING TIME ###
+        processing_time = heur_res[j][v][i]
+        u1_proc = resource.units[1].processing
+        
+        # PROC TIME OF I ON J, RELATIVE TO J ON ALL RESOURCES
+        
+        # on a scale from min to max processing time of j on all resources
+        times_res = list(heur_res[j][v].values())
+        time_res_minmax = (processing_time - min(times_res)) / (max(times_res) - min(times_res))
 
-        # how many standard deviations is the processing time of job j on
-        # resource i from the average processing time of all coming jobs on resource i
-        proctimes_jobs = []
-        for job in ws.jobs_to_come:
-            proctimes_jobs.append(heur_job[v][i][job.j])
-        proctime_job = processing_time-np.mean(proctimes_jobs)
-        if np.std(proctimes_jobs) != 0:
-            proctime_job /= np.std(proctimes_jobs)
+        # measuring how many standard deviations it is from the mean
+        time_res_stdev = (processing_time - np.mean(times_res)) / np.std(times_res)
 
-        # how many standard deviations is the processing time of job j on
-        # resource i from the average processing time of job j on all resources,
-        # taking into account the time that other resources will be unavailable
-        # as a result of processing other jobs, and the blocking on the other
-        # resources as a result of still processing another job
-        first_units = [resource.units[0] for resource in ws.resources]
-        times = []
-        for i in range(len(ws.resources)):
-            unit = first_units[i]
-            if unit.processing == None:
-                if ws.resources[i].units[1].processing == None:
-                    times.append(heur_job[v][i][j])
-                else:
-                    times.append(heur_order[v][i][j][ws.resources[i].units[1].processing.j] + heur_job[v][i][j])
+        # measuring how many standard deviations it is from the mean
+        # taking the time into account that other resources will still be unavailable
+        # taking the blocking on other resources into account
+        # blocking, relative to job j on other resources
+        times_res_occupied = []
+        times_res_blocking = []
+        times_res_occ_block = []
+        blocking_res = []
+        for res in ws.resources:
+            u0 = res.units[0]
+            u1 = res.units[1]
+            if u0.processing != None:
+                blocking_0 = heur_order[v][res.i][j][u0.processing.j]
+                times_res_occupied.append(heur_res[j][v][res.i] + (u0.c_idle - z))
+                times_res_blocking.append(heur_res[j][v][res.i] + blocking_0)
+                times_res_occ_block.append(heur_res[j][v][res.i] + (u0.c_idle - z) + blocking_0)
+                blocking_res.append((u0.c_idle - z) + blocking_0)
+            elif u1.processing != None:
+                blocking_1 = heur_order[v][res.i][j][u1.processing.j]
+                times_res_occupied.append(heur_res[j][v][res.i])
+                times_res_blocking.append(heur_res[j][v][res.i] + blocking_1)
+                times_res_occ_block.append(heur_res[j][v][res.i] + blocking_1)
+                blocking_res.append(blocking_1)
             else:
-                # time still processing other job + blocking after starting job j + processing time job j
-                times.append((unit.c_idle - z) + heur_order[v][i][j][unit.processing.j] + heur_job[v][i][j])
-        proctime_resource = processing_time - np.mean(times)
-        if np.std(times) != 0:
-            proctime_resource /= np.std(times)
-
-        # expected tardiness of job if processing starts now
-        T_expected = (z + processing_time) - due_dates[v]
-        # time until due date, relative to timespan from z=0 to due date
-        relative_time_to_duedate = (due_dates[-1] - z) / due_dates[-1]
+                times_res_occupied.append(heur_res[j][v][res.i])
+                times_res_blocking.append(heur_res[j][v][res.i])
+                times_res_occ_block.append(heur_res[j][v][res.i])
+                blocking_res.append(0)
+        time_res_stdev_occupied = 0
+        if np.std(times_res_occupied) > 0:
+            time_res_stdev_occupied = (processing_time - np.mean(times_res_occupied)) / np.std(times_res_occupied)
 
 
-        # blocking time due to the order of scheduled jobs on resource i
-        if o == None:
-            blocking = 0
+        blocking_res_stdev = 0
+        time_res_stdev_blocking = 0
+        time_res_stdev_occ_block = 0
+        if u1_proc != None:
+            if np.std(times_res_blocking) > 0:
+                time_res_stdev_blocking = ((processing_time + heur_order[v][i][j][u1_proc.j]) - np.mean(times_res_blocking)) / np.std(times_res_blocking)
+            if np.std(times_res_occ_block) > 0:            
+                time_res_stdev_occ_block = ((processing_time + heur_order[v][i][j][u1_proc.j]) - np.mean(times_res_occ_block)) / np.std(times_res_occ_block)
+            if np.std(blocking_res) > 0:
+                blocking_res_stdev = (heur_order[v][i][j][u1_proc.j] - np.mean(blocking_res)) / np.std(blocking_res)
         else:
-            blocking = heur_order[v][i][j][o.j]
+            if np.std(times_res_blocking) > 0:
+                time_res_stdev_blocking = (processing_time - np.mean(times_res_blocking)) / np.std(times_res_blocking)
+            if np.std(times_res_occ_block) > 0:
+                time_res_stdev_occ_block = (processing_time - np.mean(times_res_occ_block)) / np.std(times_res_occ_block)
+            if np.std(blocking_res) > 0:
+                blocking_res_stdev = (0 - np.mean(blocking_res)) / np.std(blocking_res)
 
+        # PROC TIME OF I ON J, RELATIVE TO ALL JOBS ON I
+        j_coming = [job.j for job in ws.jobs_to_come]
+        times_job_all = list(heur_job[v][i].values())
+        times_job_coming = [heur_job[v][i][j] for j in j_coming]
+
+        # on a scale from min to max processing time of all jobs on i
+        time_job_minmax = (processing_time - min(times_job_all)) / (max(times_job_all) - min(times_job_all))
+        time_job_minmax_coming = 0
+        if max(times_job_coming) != min(times_job_coming):
+            time_job_minmax_coming = (processing_time - min(times_job_coming)) / (max(times_job_coming) - min(times_job_coming))
+
+        # measuring how many standard deviations it is from the mean
+        time_job_stdev_all = (processing_time - np.mean(times_job_all)) / np.std(times_job_all)
+        time_job_stdev_coming = 0
+        if np.std(times_job_coming) > 0:
+            time_job_stdev_coming = (processing_time - np.mean(times_job_coming)) / np.std(times_job_coming)
+
+        # measuring how many standard deviations it is from the mean
+        # taking the blocking on other resources into account
+        # blocking, relative to other jobs on same resource
+        times_job_blocking_all = []
+        times_job_blocking_coming = []
+        blocking_job_all = []
+        blocking_job_coming = []
+
+        time_job_stdev_blocking_all = 0
+        time_job_stdev_blocking_coming = 0
+        blocking_job_all_stdev = 0
+        blocking_job_coming_stdev = 0
+        if u1_proc != None:
+            other = jobs.copy()
+            other.remove(u1_proc)
+            for job in other:
+                blocking_j = heur_order[v][i][job.j][u1_proc.j]
+                times_job_blocking_all.append(heur_job[v][i][job.j] + blocking_j)
+                blocking_job_all.append(blocking_j)
+                if job.j in j_coming:
+                    times_job_blocking_coming.append(heur_job[v][i][job.j] + heur_order[v][i][job.j][u1_proc.j])
+                    blocking_job_coming.append(blocking_j)
+
+            if np.std(times_job_blocking_all) > 0:
+                time_job_stdev_blocking_all = ((processing_time + heur_order[v][i][j][u1_proc.j]) - np.mean(times_job_blocking_all)) / np.std(times_job_blocking_all)
+            if np.std(times_job_blocking_coming) > 0:
+                time_job_stdev_blocking_coming = ((processing_time + heur_order[v][i][j][u1_proc.j]) - np.mean(times_job_blocking_coming)) / np.std(times_job_blocking_coming) 
+            if np.std(blocking_job_all) > 0:
+                blocking_job_all_stdev = (heur_order[v][i][j][u1_proc.j] - np.mean(blocking_job_all)) / np.std(blocking_job_all)
+            if np.std(blocking_job_coming) > 0:
+                blocking_job_coming_stdev = (heur_order[v][i][j][u1_proc.j] - np.mean(blocking_job_coming)) / np.std(blocking_job_coming)
+        else:
+            times_job_blocking = times_job_all.copy()
+            times_job_blocking_coming = times_job_coming.copy()
+
+            if np.std(times_job_blocking_all) > 0:
+                time_job_stdev_blocking_all = (processing_time - np.mean(times_job_blocking_all)) / np.std(times_job_blocking_all)
+            if np.std(times_job_blocking_coming) > 0:
+                (processing_time - np.mean(times_job_blocking_coming)) / np.std(times_job_blocking_coming)
+            
+
+        # absolute blocking time due to the order of scheduled jobs on resource i
+        blocking = 0
+        if u1_proc != None:
+            blocking = heur_order[v][i][j][u1_proc.j]
+
+        u0_occupied = deltas[v][j][0][i]
+
+        # mean and median blocking in the future caused by start processing job j
+        other = [job.j for job in jobs].copy()
+        other.remove(j)
+        future_blockings = [heur_order[v][i][o][j] for o in other]
+        future_blockings_mean = np.mean(future_blockings)
+        future_blockings_median = np.median(future_blockings)
+
+
+        # TARDINESS
+
+        # due dates of job j on all work stations
+        duedate = jobs[j].D[-1]
+        duedates_coming = [jobs[j].D[-1] for j in j_coming]
+            
+        # expected tardiness of job if processing starts now
+        T_expected = (z + processing_time) - duedate
+        # time until due date, relative to timespan from z=0 to due date
+        time_to_duedate = (duedate - z) / duedate
+        # number of standard deviations of due date from due dates of coming jobs
+        relative_duedate = 0
+        if np.std(duedates_coming) > 0:
+            relative_duedate = (duedate - np.mean(duedates_coming)) / np.std(duedates_coming)
+
+        idle_action = 0
+                
     # (v+1)/M, proctimes_jobs, idle_action
-    inputs = [T_expected, relative_time_to_duedate, proctime_resource, blocking]
+    inputs = [
+        time_res_minmax,
+        time_res_stdev,
+        # time_res_stdev_occupied,
+        # time_res_stdev_blocking,
+        time_res_stdev_occ_block,
+        time_job_minmax,
+        # time_job_minmax_coming,
+        # time_job_stdev_all,
+        time_job_stdev_coming,
+        # time_job_stdev_blocking_all,
+        time_job_stdev_blocking_coming,
+        blocking_res_stdev,
+        # blocking_job_all_stdev,
+        blocking_job_coming_stdev,
+        blocking,
+        u0_occupied,
+        # future_blockings_mean,
+        future_blockings_median,
+        already_processing,
+        T_expected,
+        time_to_duedate,
+        relative_duedate]
+        # idle_action]
+
+    for i in inputs:
+        if math.isnan(i):
+            print(inputs.index(i))
 
     return inputs
