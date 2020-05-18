@@ -7,9 +7,9 @@ from JEPS import *
 from NN import *
 
 class Schedule(object):
-    def __init__(self, B, D, N, M, LV, GV):
-        self.B = B              # all release dates
-        self.D = D              # all due dates
+    def __init__(self, N, M, LV, GV):
+        # self.B = B              # all release dates
+        # self.D = D              # all due dates
         self.T = np.zeros([N])  # tardiness for all jobs
 
         self.t = np.zeros([N])          # starting times of jobs
@@ -57,6 +57,7 @@ class WorkStation(object):
 
 class Resource(object):
     def __init__(self, v, i, GV, policies):
+        self.v = v                                         # index of w_v
         self.i = i                                         # index of r_i
         self.units = [Unit(v, i, q) for q in range(GV[v])]    # units in resource
         self.policy = policies[v][i]                       # initialize Q-table with zeros
@@ -95,7 +96,6 @@ class Job(object):
     def __init__(self, j, M, B, due_dates):
         self.j = j      # job index
         self.B = B      # release date
-        
         self.D = []      # due dates
         for v in range(M):
             self.D.append(due_dates[v][j])
@@ -109,16 +109,14 @@ class MDP(object):
     # INITIALIZE MDP ENVIRONMENT
     def __init__(self, N, M, LV, GV, release_dates, due_dates, NN_weights, NN_biases, NN_weights_gradients, NN_biases_gradients, policies):
         self.jobs = [Job(j, M, release_dates[j], due_dates) for j in range(N)]
-        self.actions = self.jobs.copy()
-        self.actions.append("do_nothing")
         self.workstations = [WorkStation(v, LV, GV, policies) for v in range(M)]
 
         self.NN = NeuralNetwork(
             Dense(NN_weights[0], NN_weights_gradients[0], NN_biases[0], NN_biases_gradients[0]), 
             ReLU(),
             Dense(NN_weights[1], NN_weights_gradients[1], NN_biases[1], NN_biases_gradients[1]), 
-            # ReLU(),
-            # Dense(NN_weights[2], NN_weights_gradients[2], NN_biases[2], NN_biases_gradients[2]), 
+            ReLU(),
+            Dense(NN_weights[2], NN_weights_gradients[2], NN_biases[2], NN_biases_gradients[2]), 
             # ReLU(),
             # Dense(NN_weights[3], NN_weights_gradients[3], NN_biases[3], NN_biases_gradients[3]), 
             # ReLU(),
@@ -132,15 +130,14 @@ class MDP(object):
     # RESET MDP ENVIRONMENT
     def reset(self, N, M, LV, GV, release_dates, due_dates):
         self.jobs = [j.reset() for j in self.jobs]
-        waiting = self.jobs.copy()
-        self.workstations = [workstation.reset(waiting) for workstation in self.workstations]
-        self.schedule = Schedule(release_dates, due_dates, N, M, LV, GV)
+        self.workstations = [workstation.reset(self.jobs) for workstation in self.workstations]
+        self.schedule = Schedule(N, M, LV, GV)
         self.DONE = False
         self.NN_inputs = []
         self.NN_predictions = []
 
     # TAKE A TIMESTEP
-    def step(self, z, N, M, LV, GV, GAMMA, EPSILON, deltas, heur_job, heur_res, heur_order, PHASE, METHOD):
+    def step(self, z, N, M, LV, GV, CONFIG, GAMMA, EPSILON, deltas, heur_job, heur_res, heur_order, PHASE, METHOD):
 
         for ws in self.workstations:
             for resource in ws.resources:
@@ -160,7 +157,7 @@ class MDP(object):
                             if ws.v == (M-1):
                                 job.done = True 
                                 self.schedule.c[job.j] = z
-                                self.schedule.T[job.j] += max(z - self.schedule.D[ws.v][job.j], 0)
+                                self.schedule.T[job.j] += max(z - job.D[-1], 0)
                     
                     # Set unit to idle
                     if unit.c_idle == z:
@@ -202,59 +199,59 @@ class MDP(object):
                 resource = ws.resources[unit.i]
                 
                 if unit.processing == None and len(unit.state) > 0:
-                    waiting = unit.state.copy()
+                    # waiting = unit.state.copy()
                     
                     # choose random action with probability EPSILON,
                     # otherwise choose action with highest policy value
                     if random.uniform(0, 1) < EPSILON:
-                        actions = waiting.copy()
-                        actions.append("do_nothing")
-                        job = random.sample(actions, 1)[0]
+                        # actions = waiting.copy()
+                        # actions.append("do_nothing")
+                        job = random.sample(unit.state, 1)[0]
                     else:
-                        a_indices = [job.j for job in waiting]
-                        a_indices.append(N)
+                        a_indices = [job.j for job in unit.state]
+                        # a_indices.append(N)
 
                         if (PHASE == "train") or (METHOD == "NN"):
                             values = []
-                            for j in a_indices[:-1]:
-                                inputs = generate_NN_input(N, M, LV, GV, ws, resource, self.jobs, ws.v, resource.i, j, z, heur_job, heur_res, heur_order, deltas)
+                            for j in a_indices:
+                                inputs = generate_NN_input(N, M, LV, GV, CONFIG, ws, resource, self.jobs, ws.v, resource.i, j, z, heur_job, heur_res, heur_order, deltas)
                                 values.append(self.NN.forward(inputs))
-                            inputs = generate_NN_input(N, M, LV, GV, ws, resource, self.jobs, ws.v, 0, N, z, heur_job, heur_res, heur_order, deltas)
-                            values.append(self.NN.forward(inputs))
+                            # inputs = generate_NN_input(N, M, LV, GV, ws, resource, self.jobs, ws.v, 0, N, z, heur_job, heur_res, heur_order, deltas)
+                            # values.append(self.NN.forward(inputs))
 
                             j = a_indices[np.argmax(values)]
 
                         elif (PHASE == "load") and (METHOD == "JEPS"):
                             j = a_indices[np.argmax(resource.policy[a_indices])]
                         
-                        job = self.actions[j]
+                        job = self.jobs[j]
 
-                    if job == "do_nothing":
-                        inputs = generate_NN_input(N, M, LV, GV, ws, resource, self.jobs, ws.v, 0, N, z, heur_job, heur_res, heur_order, deltas)
-                    else:
-                        inputs = generate_NN_input(N, M, LV, GV, ws, resource, self.jobs, ws.v, resource.i, job.j, z, heur_job, heur_res, heur_order, deltas)
+                    # if job == "do_nothing":
+                    #     inputs = generate_NN_input(N, M, LV, GV, ws, resource, self.jobs, ws.v, 0, N, z, heur_job, heur_res, heur_order, deltas)
+                    # else:
+                    inputs = generate_NN_input(N, M, LV, GV, CONFIG, ws, resource, self.jobs, ws.v, resource.i, job.j, z, heur_job, heur_res, heur_order, deltas)
                     self.NN_inputs.append(inputs)
                     self.NN_predictions.append(self.NN.forward(inputs))
 
                     resource.last_action = job                  # update last executed action
-                    if job != "do_nothing":
-                        resource.last_job = job                 # update last processed job
+                    # if job != "do_nothing":
+                    resource.last_job = job                 # update last processed job
 
-                        for u in first_units:
-                            u.state.remove(job)                 # remove job from all waiting lists
-                        unit.processing = job                   # set unit to processing job
+                    for u in first_units:
+                        u.state.remove(job)                 # remove job from all waiting lists
+                    unit.processing = job                   # set unit to processing job
 
-                        if job in ws.jobs_to_come:
-                            ws.jobs_to_come.remove(job)
+                    if job in ws.jobs_to_come:
+                        ws.jobs_to_come.remove(job)
 
-                        if ws.v == 0:
-                            self.schedule.t[job.j] = z                      # add starting time job j
-                        self.schedule.t_q[ws.v][job.j][unit.q] = z            # add unit starting time job j
-                        self.schedule.schedule[ws.v][resource.i].append(job.j)    # add operation to schedule
+                    if ws.v == 0:
+                        self.schedule.t[job.j] = z                      # add starting time job j
+                    self.schedule.t_q[ws.v][job.j][unit.q] = z            # add unit starting time job j
+                    self.schedule.schedule[ws.v][resource.i].append(job.j)    # add operation to schedule
 
-                        completion = z + deltas[ws.v][job.j][unit.q][resource.i]
-                        unit.c = completion                     # set completion time on unit
-                        unit.c_idle = completion + 1            # set when unit will be idle again
+                    completion = z + deltas[ws.v][job.j][unit.q][resource.i]
+                    unit.c = completion                     # set completion time on unit
+                    unit.c_idle = completion + 1            # set when unit will be idle again
                 else:
                     resource.last_action = None
 

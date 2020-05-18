@@ -66,9 +66,9 @@ def plot_schedule(OUTPUT_DIR, schedule, N, M, LV, GV):
     plt.close(fig)
 
 # Store statistics of some test iteration to log file
-def write_log(OUTPUT_DIR, PHASE, N, M, LV, GV, GAMMA, EPSILON, layer_dims, weight_decay, lr, METHOD, EPOCHS, OBJ_FUN, makespan, Tsum, Tmax, Tn, calc_time, epoch, MILP_objval, MILP_calctime):
+def write_log(OUTPUT_DIR, PHASE, N, M, LV, GV, CONFIG, GAMMA, EPSILON, layer_dims, weight_decay, lr, METHOD, EPOCHS, OBJ_FUN, makespan, Tsum, Tmax, Tn, calc_time, epoch, MILP_objval, MILP_calctime):
     file = open(OUTPUT_DIR+"log.csv",'a')
-    file.write("\n"+METHOD+"\t"+PHASE+"\t"+str(N)+"\t"+str(M)+"\t"+str(LV[0])+"\t"+str(GV[0])+"\t"+str(EPOCHS)+"\t"+str(GAMMA)+"\t"+str(round(EPSILON,2))+"\t"+str(layer_dims)+"\t"+str(weight_decay)+"\t"+str(lr)+"\t"+str(OBJ_FUN["Cmax"])+"\t"+str(OBJ_FUN["Tsum"])+"\t"+str(makespan)+"\t"+str(Tsum)+"\t"+str(Tmax)+"\t"+str(Tn)+"\t"+str(calc_time)+"\t"+str(epoch)+"\t"+str(MILP_objval)+"\t"+str(MILP_calctime))
+    file.write("\n"+METHOD+"\t"+PHASE+"\t"+str(N)+"\t"+str(M)+"\t"+str(LV[0])+"\t"+str(GV[0])+"\t"+CONFIG+"\t"+str(EPOCHS)+"\t"+str(GAMMA)+"\t"+str(round(EPSILON,2))+"\t"+str(layer_dims)+"\t"+str(weight_decay)+"\t"+str(lr)+"\t"+str(OBJ_FUN["Cmax"])+"\t"+str(OBJ_FUN["Tsum"])+"\t"+str(makespan)+"\t"+str(Tsum)+"\t"+str(Tmax)+"\t"+str(Tn)+"\t"+str(calc_time)+"\t"+str(epoch)+"\t"+str(MILP_objval)+"\t"+str(MILP_calctime))
     file.close()
 
 # Store the trained weights of the Neural Network, used as a policy value function
@@ -160,7 +160,7 @@ def load_NN_into_JEPS(NN_weights, NN_biases, policies, N, M, LV, GV, due_dates, 
 
                 inputs = generate_NN_input(v, i, j, due_dates_j, None, 0, heur_job, heur_res, heur_order, N, M, LV, GV)
                 policies[v][i][j] = policy_function.forward(inputs)
-            inputs = generate_NN_input(v, i, N, [0 for v in range(M)], None, 0, heur_job, heur_res, heur_order, N, M, LV, GV)
-            policies[v][i][N] = policy_function.forward(inputs)
+            # inputs = generate_NN_input(v, i, N, [0 for v in range(M)], None, 0, heur_job, heur_res, heur_order, N, M, LV, GV)
+            # policies[v][i][N] = policy_function.forward(inputs)
 
     return policies
