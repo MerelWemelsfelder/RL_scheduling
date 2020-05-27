@@ -7,28 +7,6 @@ import random
 import pickle
 import math
 
-# create NeuralNetwork class
-# class NeuralNetwork:
-#     def __init__(self, NN_weights):
-#         self.weights = NN_weights
-
-#     #activation function ==> S(x) = 1/1+e^(-x)
-#     def sigmoid(self, x, deriv=False):
-#         if deriv == True:
-#             return x * (1 - x)
-#         return 1 / (1 + np.exp(-x))
-
-#     # going backwards through the network to update weights
-#     def backpropagation(self, score, inputs, predictions):
-#         delta = score * self.sigmoid(predictions, deriv=True)
-#         for i in range(len(inputs)):
-#             self.weights += np.dot(inputs[i].T, delta[i])
-
-#     # function to predict output on new and unseen input data                               
-#     def predict(self, new_input):
-#         prediction = self.sigmoid(np.dot(new_input, self.weights))
-#         return prediction
-
 class Layer(object):
     
     def __init__(self):
@@ -51,12 +29,9 @@ class Layer(object):
 class Dense(Layer):
     
     def __init__(self, W, grad_W, b, grad_b):
-        # super(Dense, self).__init__()
-        #Randomly initializing the weights from normal distribution
-        self.W = W                              # np.random.normal(scale=0.01, size=(n_input, n_output))
+        self.W = W
         self.grad_W = grad_W
-        #initializing the bias with zero
-        self.b = b                              # np.zeros(n_output)
+        self.b = b
         self.grad_b = grad_b
 
     def forward(self, x_input):
@@ -184,21 +159,21 @@ def l2_regularizer(weight_decay, weights):
 
 class SGD(object):
 
-    def __init__(self, model, lr=0.01, weight_decay=0.0):
+    def __init__(self, model, gamma=0.01, weight_decay=0.0):
         self.model = model
-        self.lr = lr
+        self.gamma = gamma
         self.weight_decay = weight_decay
 
     def update_params(self):
         weights = self.model.get_params()
         grads = self.model.get_params_gradients()
         for w, dw in zip(weights, grads):
-            update = self.lr * (dw + self.weight_decay * w)
+            update = self.gamma * (dw + self.weight_decay * w)
             # it writes the result to the previous variable instead of copying
             np.subtract(w, update, out=w)
 
 # model = RL.NN, X_train = RL.NN_inputs
-def update_NN(model, X_train, y_pred, weight_decay, lr, loss, r, r_best):
+def update_NN(model, X_train, y_pred, weight_decay, GAMMA, loss, r, r_best):
     
     # y_pred = model.forward(X_train)
     score = (r_best-r)
@@ -212,14 +187,14 @@ def update_NN(model, X_train, y_pred, weight_decay, lr, loss, r, r_best):
     for i in range(len(X_train)):
         model.backward(X_train[i], loss_grad[i])
 
-    sgd = SGD(model, lr=lr, weight_decay=weight_decay)
+    sgd = SGD(model, gamma=GAMMA, weight_decay=weight_decay)
     sgd.update_params()
     return sgd.model
 
 
 
 # Generate the input vector for value prediction by the Neural Network
-def generate_NN_input(N, M, LV, GV, CONFIG, ws, resource, jobs, v, i, j, z, heur_job, heur_res, heur_order, deltas):
+def generate_NN_input(N, M, LV, GV, CONFIG, ws, resource, jobs, v, i, j, z, heur_job, heur_res, heur_blocking, heur_rev_blocking, deltas):
 
     # if the chosen action is the idle action "do_nothing"
     # if j == N:
@@ -247,7 +222,7 @@ def generate_NN_input(N, M, LV, GV, CONFIG, ws, resource, jobs, v, i, j, z, heur
     #     idle_action = 1
 
     # else:
-    ### PROCESSING TIME ###
+    # PROCESSING TIME #
     processing_time = heur_res[j][v][i]
     u1_proc = resource.units[1].processing
     
@@ -268,41 +243,49 @@ def generate_NN_input(N, M, LV, GV, CONFIG, ws, resource, jobs, v, i, j, z, heur
     times_res_blocking = []
     times_res_occ_block = []
     blocking_res = []
+    rev_blocking_res = []
     for res in ws.resources:
         u0 = res.units[0]
         u1 = res.units[1]
         if u0.processing != None:
-            blocking_0 = heur_order[v][res.i][j][u0.processing.j]
+            blocking_0 = heur_blocking[v][res.i][j][u0.processing.j]
+            rev_blocking_0 = heur_rev_blocking[v][res.i][j][u0.processing.j]
             times_res_occupied.append(heur_res[j][v][res.i] + (u0.c_idle - z))
             times_res_blocking.append(heur_res[j][v][res.i] + blocking_0)
             times_res_occ_block.append(heur_res[j][v][res.i] + (u0.c_idle - z) + blocking_0)
             blocking_res.append((u0.c_idle - z) + blocking_0)
+            rev_blocking_res.append((u0.c_idle - z) + rev_blocking_0)
         elif u1.processing != None:
-            blocking_1 = heur_order[v][res.i][j][u1.processing.j]
+            blocking_1 = heur_blocking[v][res.i][j][u1.processing.j]
+            rev_blocking_1 = heur_rev_blocking[v][res.i][j][u1.processing.j]
             times_res_occupied.append(heur_res[j][v][res.i])
             times_res_blocking.append(heur_res[j][v][res.i] + blocking_1)
             times_res_occ_block.append(heur_res[j][v][res.i] + blocking_1)
             blocking_res.append(blocking_1)
+            rev_blocking_res.append(rev_blocking_1)
         else:
             times_res_occupied.append(heur_res[j][v][res.i])
             times_res_blocking.append(heur_res[j][v][res.i])
             times_res_occ_block.append(heur_res[j][v][res.i])
             blocking_res.append(0)
+            rev_blocking_res.append(0)
     time_res_stdev_occupied = 0
     if np.std(times_res_occupied) > 0:
         time_res_stdev_occupied = (processing_time - np.mean(times_res_occupied)) / np.std(times_res_occupied)
 
-
-    blocking_res_stdev = 0
     time_res_stdev_blocking = 0
     time_res_stdev_occ_block = 0
+    blocking_res_stdev = 0
+    rev_blocking_res_stdev = 0
     if u1_proc != None:
         if np.std(times_res_blocking) > 0:
-            time_res_stdev_blocking = ((processing_time + heur_order[v][i][j][u1_proc.j]) - np.mean(times_res_blocking)) / np.std(times_res_blocking)
+            time_res_stdev_blocking = ((processing_time + heur_blocking[v][i][j][u1_proc.j]) - np.mean(times_res_blocking)) / np.std(times_res_blocking)
         if np.std(times_res_occ_block) > 0:            
-            time_res_stdev_occ_block = ((processing_time + heur_order[v][i][j][u1_proc.j]) - np.mean(times_res_occ_block)) / np.std(times_res_occ_block)
+            time_res_stdev_occ_block = ((processing_time + heur_blocking[v][i][j][u1_proc.j]) - np.mean(times_res_occ_block)) / np.std(times_res_occ_block)
         if np.std(blocking_res) > 0:
-            blocking_res_stdev = (heur_order[v][i][j][u1_proc.j] - np.mean(blocking_res)) / np.std(blocking_res)
+            blocking_res_stdev = (heur_blocking[v][i][j][u1_proc.j] - np.mean(blocking_res)) / np.std(blocking_res)
+        if np.std(rev_blocking_res) > 0:
+            rev_blocking_res_stdev = (heur_rev_blocking[v][i][j][u1_proc.j] - np.mean(rev_blocking_res)) / np.std(rev_blocking_res)
     else:
         if np.std(times_res_blocking) > 0:
             time_res_stdev_blocking = (processing_time - np.mean(times_res_blocking)) / np.std(times_res_blocking)
@@ -310,6 +293,8 @@ def generate_NN_input(N, M, LV, GV, CONFIG, ws, resource, jobs, v, i, j, z, heur
             time_res_stdev_occ_block = (processing_time - np.mean(times_res_occ_block)) / np.std(times_res_occ_block)
         if np.std(blocking_res) > 0:
             blocking_res_stdev = (0 - np.mean(blocking_res)) / np.std(blocking_res)
+        if np.std(rev_blocking_res) > 0:
+            rev_blocking_res_stdev = (0 - np.mean(rev_blocking_res)) / np.std(rev_blocking_res)
 
     # PROC TIME OF I ON J, RELATIVE TO ALL JOBS ON I
     j_coming = [job.j for job in ws.jobs_to_come]
@@ -335,30 +320,42 @@ def generate_NN_input(N, M, LV, GV, CONFIG, ws, resource, jobs, v, i, j, z, heur
     times_job_blocking_coming = []
     blocking_job_all = []
     blocking_job_coming = []
+    rev_blocking_job_all = []
+    rev_blocking_job_coming = []
 
     time_job_stdev_blocking_all = 0
     time_job_stdev_blocking_coming = 0
     blocking_job_all_stdev = 0
     blocking_job_coming_stdev = 0
+    rev_blocking_job_all_stdev = 0
+    rev_blocking_job_coming_stdev = 0
     if u1_proc != None:
         other = jobs.copy()
         other.remove(u1_proc)
         for job in other:
-            blocking_j = heur_order[v][i][job.j][u1_proc.j]
+            blocking_j = heur_blocking[v][i][job.j][u1_proc.j]
+            rev_blocking_j = heur_rev_blocking[v][i][job.j][u1_proc.j]
+
             times_job_blocking_all.append(heur_job[v][i][job.j] + blocking_j)
             blocking_job_all.append(blocking_j)
+            rev_blocking_job_all.append(rev_blocking_j)
             if job.j in j_coming:
-                times_job_blocking_coming.append(heur_job[v][i][job.j] + heur_order[v][i][job.j][u1_proc.j])
+                times_job_blocking_coming.append(heur_job[v][i][job.j] + heur_blocking[v][i][job.j][u1_proc.j])
                 blocking_job_coming.append(blocking_j)
+                rev_blocking_job_coming.append(rev_blocking_j)
 
         if np.std(times_job_blocking_all) > 0:
-            time_job_stdev_blocking_all = ((processing_time + heur_order[v][i][j][u1_proc.j]) - np.mean(times_job_blocking_all)) / np.std(times_job_blocking_all)
+            time_job_stdev_blocking_all = ((processing_time + heur_blocking[v][i][j][u1_proc.j]) - np.mean(times_job_blocking_all)) / np.std(times_job_blocking_all)
         if np.std(times_job_blocking_coming) > 0:
-            time_job_stdev_blocking_coming = ((processing_time + heur_order[v][i][j][u1_proc.j]) - np.mean(times_job_blocking_coming)) / np.std(times_job_blocking_coming) 
+            time_job_stdev_blocking_coming = ((processing_time + heur_blocking[v][i][j][u1_proc.j]) - np.mean(times_job_blocking_coming)) / np.std(times_job_blocking_coming) 
         if np.std(blocking_job_all) > 0:
-            blocking_job_all_stdev = (heur_order[v][i][j][u1_proc.j] - np.mean(blocking_job_all)) / np.std(blocking_job_all)
+            blocking_job_all_stdev = (heur_blocking[v][i][j][u1_proc.j] - np.mean(blocking_job_all)) / np.std(blocking_job_all)
         if np.std(blocking_job_coming) > 0:
-            blocking_job_coming_stdev = (heur_order[v][i][j][u1_proc.j] - np.mean(blocking_job_coming)) / np.std(blocking_job_coming)
+            blocking_job_coming_stdev = (heur_blocking[v][i][j][u1_proc.j] - np.mean(blocking_job_coming)) / np.std(blocking_job_coming)
+        if np.std(rev_blocking_job_all) > 0:
+            rev_blocking_job_all_stdev = (heur_rev_blocking[v][i][j][u1_proc.j] - np.mean(rev_blocking_job_all)) / np.std(rev_blocking_job_all)
+        if np.std(rev_blocking_job_coming) > 0:
+            rev_blocking_job_coming_stdev = (heur_rev_blocking[v][i][j][u1_proc.j] - np.mean(rev_blocking_job_coming)) / np.std(rev_blocking_job_coming)
     else:
         times_job_blocking = times_job_all.copy()
         times_job_blocking_coming = times_job_coming.copy()
@@ -367,12 +364,15 @@ def generate_NN_input(N, M, LV, GV, CONFIG, ws, resource, jobs, v, i, j, z, heur
             time_job_stdev_blocking_all = (processing_time - np.mean(times_job_blocking_all)) / np.std(times_job_blocking_all)
         if np.std(times_job_blocking_coming) > 0:
             (processing_time - np.mean(times_job_blocking_coming)) / np.std(times_job_blocking_coming)
-        
 
     # absolute blocking time due to the order of scheduled jobs on resource i
     blocking = 0
     if u1_proc != None:
-        blocking = heur_order[v][i][j][u1_proc.j]
+        blocking = heur_blocking[v][i][j][u1_proc.j]
+
+    rev_blocking = 0
+    if u1_proc != None:
+        rev_blocking = heur_rev_blocking[v][i][j][u1_proc.j]
 
     # the time that unit 0 of resource i will be occupied as a result from scheduling j on i
     u0_occupied = deltas[v][j][0][i]
@@ -380,9 +380,12 @@ def generate_NN_input(N, M, LV, GV, CONFIG, ws, resource, jobs, v, i, j, z, heur
     # mean and median blocking in the future caused by start processing job j
     other = [job.j for job in jobs].copy()
     other.remove(j)
-    future_blockings = [heur_order[v][i][o][j] for o in other]
+    future_blockings = [heur_blocking[v][i][o][j] for o in other]
     future_blockings_mean = np.mean(future_blockings)
     future_blockings_median = np.median(future_blockings)
+    future_rev_blockings = [heur_rev_blocking[v][i][o][j] for o in other]
+    future_rev_blockings_mean = np.mean(future_rev_blockings)
+    future_rev_blockings_median = np.median(future_rev_blockings)
 
     # how many jobs are already being processed on resource i
     already_processing = 0
@@ -405,21 +408,33 @@ def generate_NN_input(N, M, LV, GV, CONFIG, ws, resource, jobs, v, i, j, z, heur
     if np.std(duedates_coming) > 0:
         relative_duedate = (duedate - np.mean(duedates_coming)) / np.std(duedates_coming)
 
-    # lengths = 23 15 9 4 5 1 9 12 6
-    all_vars = [time_res_minmax, time_res_stdev, time_res_stdev_occupied, time_res_stdev_blocking, time_res_stdev_occ_block, time_job_minmax, time_job_minmax_coming, time_job_stdev_all, time_job_stdev_coming, time_job_stdev_blocking_all, time_job_stdev_blocking_coming, blocking_res_stdev, blocking_job_all_stdev, blocking_job_coming_stdev, blocking, u0_occupied, future_blockings_mean, future_blockings_median, already_processing, T_expected, time_to_duedate, relative_duedate]
-    XV = [time_res_minmax, time_res_stdev, time_res_stdev_occ_block, time_job_minmax, time_job_stdev_coming, time_job_stdev_blocking_coming, blocking_res_stdev, blocking_job_coming_stdev, blocking, u0_occupied, future_blockings_median, already_processing, T_expected, time_to_duedate, relative_duedate]
-    minmax_large = [time_res_stdev, time_job_minmax, time_job_stdev_coming, blocking_res_stdev, blocking, u0_occupied, future_blockings_median, T_expected, time_to_duedate]
-    minmax_small = [blocking, future_blockings_mean, future_blockings_median, T_expected]
-    generalizability = [time_res_minmax, time_job_stdev_coming, time_job_stdev_blocking_coming, blocking_job_coming_stdev, relative_duedate]
+
+    all_vars = [
+        time_res_minmax, time_res_stdev, time_res_stdev_occupied, time_res_stdev_blocking, time_res_stdev_occ_block, 
+        time_job_minmax, time_job_minmax_coming, time_job_stdev_all, time_job_stdev_coming, time_job_stdev_blocking_all, time_job_stdev_blocking_coming, 
+        blocking_res_stdev, rev_blocking_res_stdev, blocking_job_all_stdev, rev_blocking_job_all_stdev, blocking_job_coming_stdev, rev_blocking_job_coming_stdev, blocking, rev_blocking, 
+        u0_occupied, future_blockings_mean, future_rev_blockings_mean, future_blockings_median, future_rev_blockings_median, 
+        already_processing, T_expected, time_to_duedate, relative_duedate]
+
+    XV = [
+        time_res_minmax, time_res_stdev, time_res_stdev_occ_block, time_job_minmax, time_job_stdev_coming, time_job_stdev_blocking_coming, 
+        blocking_res_stdev, rev_blocking_res_stdev, blocking_job_coming_stdev, rev_blocking_job_coming_stdev, blocking, rev_blocking, u0_occupied, future_blockings_median, future_rev_blockings_median, 
+        already_processing, T_expected, time_to_duedate, relative_duedate]
+
+    minmax_large = [
+        time_res_stdev, time_job_minmax, time_job_stdev_coming, blocking_res_stdev, rev_blocking_res_stdev, blocking, rev_blocking, u0_occupied, 
+        future_blockings_median, future_rev_blockings_median, T_expected, time_to_duedate]
+    minmax_small = [blocking, rev_blocking, u0_occupied, future_blockings_mean, future_rev_blockings_mean, future_blockings_median, future_rev_blockings_median, T_expected]
+    generalizability = [time_res_minmax, time_job_stdev_coming, time_job_stdev_blocking_coming, blocking_job_coming_stdev, rev_blocking_job_coming_stdev, relative_duedate]
     high = [T_expected]
-    absolute = [time_res_minmax, time_job_minmax, time_job_minmax_coming, blocking, u0_occupied, future_blockings_median, already_processing, T_expected, time_to_duedate]
-    relative = [time_res_stdev, time_res_stdev_occupied, time_res_stdev_blocking, time_res_stdev_occ_block, time_job_stdev_all, time_job_stdev_coming, time_job_stdev_blocking_all, time_job_stdev_blocking_coming, blocking_res_stdev, blocking_job_all_stdev, blocking_job_coming_stdev, relative_duedate]
-    generalizability_T = [time_res_minmax, time_job_stdev_coming, time_job_stdev_blocking_coming, blocking_job_coming_stdev, relative_duedate, T_expected]
+    absolute = [
+        time_res_minmax, time_job_minmax, time_job_minmax_coming, blocking, rev_blocking, u0_occupied, 
+        future_blockings_median, future_rev_blockings_median, already_processing, T_expected, time_to_duedate]
+    relative = [
+        time_res_stdev, time_res_stdev_occupied, time_res_stdev_blocking, time_res_stdev_occ_block, time_job_stdev_all, time_job_stdev_coming, time_job_stdev_blocking_all, time_job_stdev_blocking_coming, 
+        blocking_res_stdev, rev_blocking_res_stdev, blocking_job_all_stdev, rev_blocking_job_all_stdev, blocking_job_coming_stdev, rev_blocking_job_coming_stdev, relative_duedate]
+    generalizability_T = [time_res_minmax, time_job_stdev_coming, time_job_stdev_blocking_coming, blocking_job_coming_stdev, rev_blocking_job_coming_stdev, relative_duedate, T_expected]
 
     configs = [all_vars, XV, minmax_large, minmax_small, generalizability, high, absolute, relative, generalizability_T]
-
-    # for i in inputs:
-    #     if math.isnan(i):
-    #         print(inputs.index(i))
 
     return configs[CONFIG]

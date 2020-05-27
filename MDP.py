@@ -8,8 +8,6 @@ from NN import *
 
 class Schedule(object):
     def __init__(self, N, M, LV, GV):
-        # self.B = B              # all release dates
-        # self.D = D              # all due dates
         self.T = np.zeros([N])  # tardiness for all jobs
 
         self.t = np.zeros([N])          # starting times of jobs
@@ -113,17 +111,10 @@ class MDP(object):
 
         self.NN = NeuralNetwork(
             Dense(NN_weights[0], NN_weights_gradients[0], NN_biases[0], NN_biases_gradients[0]), 
-            ReLU(),
+            Sigmoid(),
             Dense(NN_weights[1], NN_weights_gradients[1], NN_biases[1], NN_biases_gradients[1]), 
-            ReLU(),
-            Dense(NN_weights[2], NN_weights_gradients[2], NN_biases[2], NN_biases_gradients[2]), 
-            # ReLU(),
-            # Dense(NN_weights[3], NN_weights_gradients[3], NN_biases[3], NN_biases_gradients[3]), 
-            # ReLU(),
-            # Dense(NN_weights[4], NN_weights_gradients[4], NN_biases[4], NN_biases_gradients[4]), 
-            # ReLU(),
-            # Dense(NN_weights[5], NN_weights_gradients[5], NN_biases[5], NN_biases_gradients[5]), 
-            # ReLU(),
+            Sigmoid(),
+            Dense(NN_weights[2], NN_weights_gradients[2], NN_biases[2], NN_biases_gradients[2]),
             Sigmoid())
         self.loss = NLL()
         
@@ -137,7 +128,7 @@ class MDP(object):
         self.NN_predictions = []
 
     # TAKE A TIMESTEP
-    def step(self, z, N, M, LV, GV, CONFIG, GAMMA, EPSILON, deltas, heur_job, heur_res, heur_order, PHASE, METHOD):
+    def step(self, z, N, M, LV, GV, CONFIG, GAMMA, EPSILON, deltas, heur_job, heur_res, heur_blocking, heur_rev_blocking, PHASE, METHOD):
 
         for ws in self.workstations:
             for resource in ws.resources:
@@ -214,9 +205,9 @@ class MDP(object):
                         if (PHASE == "train") or (METHOD == "NN"):
                             values = []
                             for j in a_indices:
-                                inputs = generate_NN_input(N, M, LV, GV, CONFIG, ws, resource, self.jobs, ws.v, resource.i, j, z, heur_job, heur_res, heur_order, deltas)
+                                inputs = generate_NN_input(N, M, LV, GV, CONFIG, ws, resource, self.jobs, ws.v, resource.i, j, z, heur_job, heur_res, heur_blocking, heur_rev_blocking, deltas)
                                 values.append(self.NN.forward(inputs))
-                            # inputs = generate_NN_input(N, M, LV, GV, ws, resource, self.jobs, ws.v, 0, N, z, heur_job, heur_res, heur_order, deltas)
+                            # inputs = generate_NN_input(N, M, LV, GV, ws, resource, self.jobs, ws.v, 0, N, z, heur_job, heur_res, heur_blocking, heur_rev_blocking, deltas)
                             # values.append(self.NN.forward(inputs))
 
                             j = a_indices[np.argmax(values)]
@@ -227,9 +218,9 @@ class MDP(object):
                         job = self.jobs[j]
 
                     # if job == "do_nothing":
-                    #     inputs = generate_NN_input(N, M, LV, GV, ws, resource, self.jobs, ws.v, 0, N, z, heur_job, heur_res, heur_order, deltas)
+                    #     inputs = generate_NN_input(N, M, LV, GV, ws, resource, self.jobs, ws.v, 0, N, z, heur_job, heur_res, heur_blocking, heur_rev_blocking, deltas)
                     # else:
-                    inputs = generate_NN_input(N, M, LV, GV, CONFIG, ws, resource, self.jobs, ws.v, resource.i, job.j, z, heur_job, heur_res, heur_order, deltas)
+                    inputs = generate_NN_input(N, M, LV, GV, CONFIG, ws, resource, self.jobs, ws.v, resource.i, job.j, z, heur_job, heur_res, heur_blocking, heur_rev_blocking, deltas)
                     self.NN_inputs.append(inputs)
                     self.NN_predictions.append(self.NN.forward(inputs))
 
