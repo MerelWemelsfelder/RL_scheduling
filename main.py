@@ -26,13 +26,13 @@ def find_schedule(return_dict, MILP_objval, N, M, LV, GV, INPUT_CONFIGS, CONFIG,
 
     # Load stored weights for the policy value function
     if PHASE == "load":
-        with open(str(layer_dims)+'-weights.pickle','rb') as f:
+        with open('weights/'+str(layer_dims)+'-MILP-weights.pickle','rb') as f:
             NN_weights = pickle.load(f)
-        with open(str(layer_dims)+'-biases.pickle','rb') as f:
+        with open('weights/'+str(layer_dims)+'-MILP-biases.pickle','rb') as f:
             NN_biases = pickle.load(f)
-        with open(str(layer_dims)+'-weights_grad.pickle','rb') as f:
+        with open('weights/'+str(layer_dims)+'-MILP-weights_grad.pickle','rb') as f:
             NN_weights_gradients = pickle.load(f)
-        with open(str(layer_dims)+'-biases_grad.pickle','rb') as f:
+        with open('weights/'+str(layer_dims)+'-MILP-biases_grad.pickle','rb') as f:
             NN_biases_gradients = pickle.load(f)
 
         # Transform the NN weights into policies to be used by JEPS
@@ -91,7 +91,7 @@ def find_schedule(return_dict, MILP_objval, N, M, LV, GV, INPUT_CONFIGS, CONFIG,
 
         # Update the weighs of the policy value function
         # if PHASE == "train":
-        RL.NN = update_NN(model=RL.NN, X_train=np.array(RL.NN_inputs), y_pred=np.array(RL.NN_predictions), weight_decay=weight_decay, GAMMA=GAMMA, loss=RL.loss, r=r, r_best=r_best)
+        RL.NN = update_NN(model=RL.NN, X_train=np.array(RL.NN_inputs), y_pred=np.array(RL.NN_predictions), weight_decay=weight_decay, GAMMA=GAMMA, loss=RL.loss, r=r, r_best=r_best, MILP_objval=MILP_objval)
 
         # If this schedule has the best objective value found so far,
         # update best schedule and makespan, and update policy values for JEPS
@@ -170,15 +170,16 @@ def test(N, M, LV, GV, INPUT_CONFIGS, CONFIG, GAMMA, GAMMA_DECREASE, EPSILON, EP
         NN_weights_gradients = [grads[i] for i in range(0,len(grads),2)]
         NN_biases_gradients = [grads[i] for i in range(1,len(grads),2)]
 
-        # if PHASE == "train":
-        #     write_NN_weights(OUTPUT_DIR, M, N, LV, GV, EPSILON, layer_dims, OBJ_FUN, NN_weights, NN_biases, NN_weights_gradients, NN_biases_gradients, GAMMA_DECREASE)
+        if PHASE == "train":
+            write_NN_weights(OUTPUT_DIR, M, N, LV, GV, EPSILON, layer_dims, OBJ_FUN, NN_weights, NN_biases, NN_weights_gradients, NN_biases_gradients, GAMMA_DECREASE)
 
         plot_schedule(OUTPUT_DIR, schedule, N, M, LV, GV)
         write_log(OUTPUT_DIR, PHASE, N, M, LV, GV, INPUT_CONFIGS[CONFIG], GAMMA, GAMMA_DECREASE, EPSILON, EPSILON_DECREASE, layer_dims, weight_decay, METHOD, EPOCHS, OBJ_FUN, makespan, Tsum, Tmax, Tn, calc_time, epoch_best_found, MILP_objval, MILP_calctime, MILP_TIMEOUT)
+        # write_log(OUTPUT_DIR, PHASE, N, M, LV, GV, INPUT_CONFIGS[CONFIG], GAMMA, GAMMA_DECREASE, EPSILON, EPSILON_DECREASE, layer_dims, weight_decay, METHOD, 0, OBJ_FUN, 0, 0, 0, 0, 1, 0, MILP_objval, MILP_calctime, MILP_TIMEOUT)
 
 def main():
-    N = 15         # number of jobs
-    M = 1           # number of work stations
+    N = 15        # number of jobs
+    M = 1         # number of work stations
     LV = [6]      # number of resources in each work station
     GV = [6]      # number of units in each resource of each work station
     
@@ -186,7 +187,7 @@ def main():
     EPSILON = 1.0   # probability of choosing a random action (= exploring)
 
     GAMMA_DECREASE = 0.1
-    EPSILON_DECREASE = 0.025
+    EPSILON_DECREASE = 0.1  # 0.025 for training, 0.1 for loading
     weight_decay = 0.00001
 
     OBJ_FUN = {
@@ -210,45 +211,58 @@ def main():
     METHOD = "NN"     # JEPS / Q_learning / NN
 
     EPOCHS = 30000
-    TIMEOUT = 1*60
-    MILP_TIMEOUT = 30*60
+    TIMEOUT = 15*60
+    MILP_TIMEOUT = 0
     OUTPUT_DIR = '../output/'
 
     file = open(OUTPUT_DIR+"log.csv",'a')
     file.write("METHOD\tPHASE\tN\tM\tLV\tGV\tCONFIG\tEPOCHS\tGAMMA\tGAMMA_DECREASE\tEPSILON\tEPSILON_DECREASE\tLAYER_DIMS\tWEIGHT_DECAY\tCMAX_WEIGHT\tTSUM_WEIGHT\tMAKESPAN\tTSUM\tTMAX\tTN\tTIME\tEPOCH_BEST\tMILP_OBJVAL\tMILP_CALCTIME\tMILP_TIMEOUT")
     file.close()
 
-    for EPSILON in [0,0.3,1]:
-        for PHASE in ["load", "train"]:
-            for TIMEOUT in [5, 30, 60, 3*60, 30*60]:
-                for i in range(5):
-                    N = 4
-                    LV = [2]
-                    test(N, M, LV, GV, INPUT_CONFIGS, CONFIG, GAMMA, GAMMA_DECREASE, EPSILON, EPSILON_DECREASE, OBJ_FUN, layer_dims, weight_decay, NN_weights, NN_biases, NN_weights_gradients, NN_biases_gradients, PHASE, METHOD, EPOCHS, OUTPUT_DIR, TIMEOUT, MILP_TIMEOUT)
+    # for N in [8, 13, 18]:
+    #     for LV in [[4], [9]]:
+    #         test(N, M, LV, GV, INPUT_CONFIGS, CONFIG, GAMMA, GAMMA_DECREASE, EPSILON, EPSILON_DECREASE, OBJ_FUN, layer_dims, weight_decay, NN_weights, NN_biases, NN_weights_gradients, NN_biases_gradients, PHASE, METHOD, EPOCHS, OUTPUT_DIR, TIMEOUT, MILP_TIMEOUT)
+    #         GAMMA *= (1-GAMMA_DECREASE)
 
-                    N = 8
-                    LV = [4]
-                    test(N, M, LV, GV, INPUT_CONFIGS, CONFIG, GAMMA, GAMMA_DECREASE, EPSILON, EPSILON_DECREASE, OBJ_FUN, layer_dims, weight_decay, NN_weights, NN_biases, NN_weights_gradients, NN_biases_gradients, PHASE, METHOD, EPOCHS, OUTPUT_DIR, TIMEOUT, MILP_TIMEOUT)
+    for i in range(3):
+        for EPSILON in [0, 0.2]:
+            # for PHASE in ["load", "train"]:
+            for TIMEOUT in [3*60, 30*60]: # 30, 60
+    
+                N = 4
+                LV = [2 for i in range(M)]
+                GV = [4 for i in range(M)]
+                test(N, M, LV, GV, INPUT_CONFIGS, CONFIG, GAMMA, GAMMA_DECREASE, EPSILON, EPSILON_DECREASE, OBJ_FUN, layer_dims, weight_decay, NN_weights, NN_biases, NN_weights_gradients, NN_biases_gradients, PHASE, METHOD, EPOCHS, OUTPUT_DIR, TIMEOUT, MILP_TIMEOUT)
 
-                    N = 12
-                    LV = [6]
-                    test(N, M, LV, GV, INPUT_CONFIGS, CONFIG, GAMMA, GAMMA_DECREASE, EPSILON, EPSILON_DECREASE, OBJ_FUN, layer_dims, weight_decay, NN_weights, NN_biases, NN_weights_gradients, NN_biases_gradients, PHASE, METHOD, EPOCHS, OUTPUT_DIR, TIMEOUT, MILP_TIMEOUT)
+                N = 8
+                LV = [4 for i in range(M)]
+                GV = [4 for i in range(M)]
+                test(N, M, LV, GV, INPUT_CONFIGS, CONFIG, GAMMA, GAMMA_DECREASE, EPSILON, EPSILON_DECREASE, OBJ_FUN, layer_dims, weight_decay, NN_weights, NN_biases, NN_weights_gradients, NN_biases_gradients, PHASE, METHOD, EPOCHS, OUTPUT_DIR, TIMEOUT, MILP_TIMEOUT)
 
-                    N = 18
-                    LV = [8]
-                    test(N, M, LV, GV, INPUT_CONFIGS, CONFIG, GAMMA, GAMMA_DECREASE, EPSILON, EPSILON_DECREASE, OBJ_FUN, layer_dims, weight_decay, NN_weights, NN_biases, NN_weights_gradients, NN_biases_gradients, PHASE, METHOD, EPOCHS, OUTPUT_DIR, TIMEOUT, MILP_TIMEOUT)
+                N = 18
+                LV = [8 for i in range(M)]
+                GV = [4 for i in range(M)]
+                test(N, M, LV, GV, INPUT_CONFIGS, CONFIG, GAMMA, GAMMA_DECREASE, EPSILON, EPSILON_DECREASE, OBJ_FUN, layer_dims, weight_decay, NN_weights, NN_biases, NN_weights_gradients, NN_biases_gradients, PHASE, METHOD, EPOCHS, OUTPUT_DIR, TIMEOUT, MILP_TIMEOUT)
 
-                    N = 24
-                    LV = [10]
-                    test(N, M, LV, GV, INPUT_CONFIGS, CONFIG, GAMMA, GAMMA_DECREASE, EPSILON, EPSILON_DECREASE, OBJ_FUN, layer_dims, weight_decay, NN_weights, NN_biases, NN_weights_gradients, NN_biases_gradients, PHASE, METHOD, EPOCHS, OUTPUT_DIR, TIMEOUT, MILP_TIMEOUT)
+                N = 32
+                LV = [13 for i in range(M)]
+                GV = [4 for i in range(M)]
+                test(N, M, LV, GV, INPUT_CONFIGS, CONFIG, GAMMA, GAMMA_DECREASE, EPSILON, EPSILON_DECREASE, OBJ_FUN, layer_dims, weight_decay, NN_weights, NN_biases, NN_weights_gradients, NN_biases_gradients, PHASE, METHOD, EPOCHS, OUTPUT_DIR, TIMEOUT, MILP_TIMEOUT)
 
-                    N = 32
-                    LV = [13]
-                    test(N, M, LV, GV, INPUT_CONFIGS, CONFIG, GAMMA, GAMMA_DECREASE, EPSILON, EPSILON_DECREASE, OBJ_FUN, layer_dims, weight_decay, NN_weights, NN_biases, NN_weights_gradients, NN_biases_gradients, PHASE, METHOD, EPOCHS, OUTPUT_DIR, TIMEOUT, MILP_TIMEOUT)
+                N = 47
+                LV = [17 for i in range(M)]
+                GV = [4 for i in range(M)]
+                test(N, M, LV, GV, INPUT_CONFIGS, CONFIG, GAMMA, GAMMA_DECREASE, EPSILON, EPSILON_DECREASE, OBJ_FUN, layer_dims, weight_decay, NN_weights, NN_biases, NN_weights_gradients, NN_biases_gradients, PHASE, METHOD, EPOCHS, OUTPUT_DIR, TIMEOUT, MILP_TIMEOUT)
 
-                    N = 64
-                    LV = [21]
-                    test(N, M, LV, GV, INPUT_CONFIGS, CONFIG, GAMMA, GAMMA_DECREASE, EPSILON, EPSILON_DECREASE, OBJ_FUN, layer_dims, weight_decay, NN_weights, NN_biases, NN_weights_gradients, NN_biases_gradients, PHASE, METHOD, EPOCHS, OUTPUT_DIR, TIMEOUT, MILP_TIMEOUT)
+                N = 64
+                LV = [21 for i in range(M)]
+                GV = [4 for i in range(M)]
+                test(N, M, LV, GV, INPUT_CONFIGS, CONFIG, GAMMA, GAMMA_DECREASE, EPSILON, EPSILON_DECREASE, OBJ_FUN, layer_dims, weight_decay, NN_weights, NN_biases, NN_weights_gradients, NN_biases_gradients, PHASE, METHOD, EPOCHS, OUTPUT_DIR, TIMEOUT, MILP_TIMEOUT)
+
+                N = 81
+                LV = [26 for i in range(M)]
+                GV = [4 for i in range(M)]
+                test(N, M, LV, GV, INPUT_CONFIGS, CONFIG, GAMMA, GAMMA_DECREASE, EPSILON, EPSILON_DECREASE, OBJ_FUN, layer_dims, weight_decay, NN_weights, NN_biases, NN_weights_gradients, NN_biases_gradients, PHASE, METHOD, EPOCHS, OUTPUT_DIR, TIMEOUT, MILP_TIMEOUT)
 
 if __name__ == '__main__':
     main()
