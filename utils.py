@@ -50,14 +50,14 @@ def write_log(OUTPUT_DIR, PHASE, N, M, LV, GV, CONFIG, GAMMA, GAMMA_DECREASE, EP
     file.close()
 
 # Store the trained weights of the Neural Network, used as a policy value function
-def write_NN_weights(OUTPUT_DIR, M, N, LV, GV, EPSILON, layer_dims, OBJ_FUN, NN_weights, NN_biases, NN_weights_gradients, NN_biases_gradients, GAMMA_DECREASE):
-    with open(OUTPUT_DIR+"NN_weights/"+str(layer_dims)+"-"+str(GAMMA_DECREASE)+"-"+str(N)+"_"+str(LV)+"-weights.pickle",'wb') as f:
+def write_NN_weights(OUTPUT_DIR, M, N, LV, GV, EPSILON, layer_dims, OBJ_FUN, NN_weights, NN_biases, NN_weights_gradients, NN_biases_gradients, GAMMA, GAMMA_DECREASE):
+    with open(OUTPUT_DIR+"NN_weights/"+str(layer_dims)+"-"+str(N)+"_"+str(LV)+"-weights.pickle",'wb') as f:
         pickle.dump(NN_weights, f)
-    with open(OUTPUT_DIR+"NN_weights/"+str(layer_dims)+"-"+str(GAMMA_DECREASE)+"-"+str(N)+"_"+str(LV)+"-biases.pickle",'wb') as f:
+    with open(OUTPUT_DIR+"NN_weights/"+str(layer_dims)+"-"+str(N)+"_"+str(LV)+"-biases.pickle",'wb') as f:
         pickle.dump(NN_biases, f)
-    with open(OUTPUT_DIR+"NN_weights/"+str(layer_dims)+"-"+str(GAMMA_DECREASE)+"-"+str(N)+"_"+str(LV)+"-weights_grad.pickle",'wb') as f:
+    with open(OUTPUT_DIR+"NN_weights/"+str(layer_dims)+"-"+str(N)+"_"+str(LV)+"-weights_grad.pickle",'wb') as f:
         pickle.dump(NN_weights_gradients, f)
-    with open(OUTPUT_DIR+"NN_weights/"+str(layer_dims)+"-"+str(GAMMA_DECREASE)+"-"+str(N)+"_"+str(LV)+"-biases_grad.pickle",'wb') as f:
+    with open(OUTPUT_DIR+"NN_weights/"+str(layer_dims)+"-"+str(N)+"_"+str(LV)+"-biases_grad.pickle",'wb') as f:
         pickle.dump(NN_biases_gradients, f)
 
 # Heuristic: for each resource in each work station, the time that each job costs to process

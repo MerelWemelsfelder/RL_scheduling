@@ -175,13 +175,13 @@ class SGD(object):
 # model = RL.NN, X_train = RL.NN_inputs
 def update_NN(model, X_train, y_pred, weight_decay, GAMMA, loss, r, r_best, MILP_objval):
     
-    score = (r_best-r)
-    if min(r_best, r) > 0:
-        score /= min(r_best, r)
+    # score = (r_best-r)
+    # if min(r_best, r) > 0:
+    #     score /= min(r_best, r)
 
-    # score = (MILP_objval-r)
-    # if min(MILP_objval, r) > 0:
-    #     score /= min(MILP_objval, r)
+    score = (MILP_objval-r)
+    if min(MILP_objval, r) > 0:
+        score /= min(MILP_objval, r)
 
     y_true = y_pred + (score * y_pred)
 
