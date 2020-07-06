@@ -1,9 +1,16 @@
 import numpy as np
 import random
 import pickle
+import _pickle as cpickle
 import matplotlib.pyplot as plt
 import os
 from matplotlib.lines import Line2D
+from numpy import asarray
+from numpy import savetxt
+from numpy import loadtxt
+from numpy import save
+from numpy import load
+from time import gmtime, strftime
 
 from NN import *
 
@@ -48,6 +55,17 @@ def write_log(OUTPUT_DIR, PHASE, N, M, LV, GV, CONFIG, GAMMA, GAMMA_DECREASE, EP
     file = open(OUTPUT_DIR+"log.csv",'a')
     file.write("\n"+METHOD+"\t"+PHASE+"\t"+str(N)+"\t"+str(M)+"\t"+str(LV[0])+"\t"+str(GV[0])+"\t"+CONFIG+"\t"+str(EPOCHS)+"\t"+str(GAMMA)+"\t"+str(GAMMA_DECREASE)+"\t"+str(round(EPSILON,2))+"\t"+str(EPSILON_DECREASE)+"\t"+str(layer_dims)+"\t"+str(weight_decay)+"\t"+str(OBJ_FUN["Cmax"])+"\t"+str(OBJ_FUN["Tsum"])+"\t"+str(makespan)+"\t"+str(Tsum)+"\t"+str(Tmax)+"\t"+str(Tn)+"\t"+str(calc_time)+"\t"+str(epoch)+"\t"+str(MILP_objval)+"\t"+str(MILP_calctime)+"\t"+str(MILP_TIMEOUT))
     file.close()
+
+# Store statistics of some test iteration to log file
+def write_training_batch(OUTPUT_DIR, X_train, y_pred, r, MILP_objval):    
+    score = (MILP_objval-r)
+    if min(MILP_objval, r) > 0:
+        score /= min(MILP_objval, r)
+    y_true = y_pred + (score * y_pred)
+
+    save(OUTPUT_DIR+"X_train/"+str(strftime("%d-%H:%M:%S", gmtime()))+".npy", X_train)
+    save(OUTPUT_DIR+"y_pred/"+str(strftime("%d-%H:%M:%S", gmtime()))+".npy", y_pred)
+    save(OUTPUT_DIR+"y_true/"+str(strftime("%d-%H:%M:%S", gmtime()))+".npy", y_true)
 
 # Store the trained weights of the Neural Network, used as a policy value function
 def write_NN_weights(OUTPUT_DIR, M, N, LV, GV, EPSILON, layer_dims, OBJ_FUN, NN_weights, NN_biases, NN_weights_gradients, NN_biases_gradients, GAMMA, GAMMA_DECREASE):
