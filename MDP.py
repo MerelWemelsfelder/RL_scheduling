@@ -8,7 +8,7 @@ from NN import *
 
 class Schedule(object):
     def __init__(self, N, M, LV, GV):
-        self.T = np.zeros([N])  # tardiness for all jobs
+        self.T = np.zeros([N])          # tardiness for all jobs
 
         self.t = np.zeros([N])          # starting times of jobs
         self.c = np.zeros([N])          # completion times of jobs
@@ -43,9 +43,9 @@ class Schedule(object):
         return r
 
 class WorkStation(object):
-    def __init__(self, v, LV, GV, policies):
-        self.v = v                                                          # index of w_v
-        self.resources = [Resource(v, i, GV, policies) for i in range(LV[v])]     # units in resource
+    def __init__(self, v, LV, GV):
+        self.v = v                                                                  # index of w_v
+        self.resources = [Resource(v, i, GV) for i in range(LV[v])]       # units in resource
         
     def reset(self, waiting):
         self.resources = [resource.reset(waiting) for resource in self.resources]
@@ -54,11 +54,11 @@ class WorkStation(object):
         return self
 
 class Resource(object):
-    def __init__(self, v, i, GV, policies):
-        self.v = v                                         # index of w_v
-        self.i = i                                         # index of r_i
-        self.units = [Unit(v, i, q) for q in range(GV[v])]    # units in resource
-        self.policy = policies[v][i]                       # initialize Q-table with zeros
+    def __init__(self, v, i, GV):
+        self.v = v                                          # index of w_v
+        self.i = i                                          # index of r_i
+        self.units = [Unit(v, i, q) for q in range(GV[v])]  # units in resource
+        # self.policy = policies[v][i]                      # initialize Q-table with zeros
         
     def reset(self, waiting):
         self.units = [unit.reset(waiting) for unit in self.units]
@@ -94,7 +94,7 @@ class Job(object):
     def __init__(self, j, M, B, due_dates):
         self.j = j      # job index
         self.B = B      # release date
-        self.D = []      # due dates
+        self.D = []     # due dates
         for v in range(M):
             self.D.append(due_dates[v][j])
         
@@ -105,9 +105,9 @@ class Job(object):
 
 class MDP(object):
     # INITIALIZE MDP ENVIRONMENT
-    def __init__(self, N, M, LV, GV, release_dates, due_dates, NN_weights, NN_biases, NN_weights_gradients, NN_biases_gradients, policies):
+    def __init__(self, N, M, LV, GV, release_dates, due_dates, NN_weights, NN_biases, NN_weights_gradients, NN_biases_gradients):
         self.jobs = [Job(j, M, release_dates[j], due_dates) for j in range(N)]
-        self.workstations = [WorkStation(v, LV, GV, policies) for v in range(M)]
+        self.workstations = [WorkStation(v, LV, GV) for v in range(M)]
 
         self.NN = NeuralNetwork(
             Dense(NN_weights[0], NN_weights_gradients[0], NN_biases[0], NN_biases_gradients[0]), 
@@ -179,7 +179,7 @@ class MDP(object):
                             unit.processing = job                       # set unit to processing selected job
                             self.schedule.t_q[ws.v][job.j][unit.q] = z  # add unit starting time job j
 
-                            completion = z + deltas[ws.v][job.j][unit.q][resource.i]  # TODO dimensies van delta checken met M erbij
+                            completion = z + deltas[ws.v][job.j][unit.q][resource.i]
                             unit.c = completion
                             unit.c_idle = completion + 1
                         
@@ -212,8 +212,8 @@ class MDP(object):
 
                             j = a_indices[np.argmax(values)]
 
-                        elif (PHASE == "load") and (METHOD == "JEPS"):
-                            j = a_indices[np.argmax(resource.policy[a_indices])]
+                        # elif (PHASE == "load") and (METHOD == "JEPS"):
+                        #     j = a_indices[np.argmax(resource.policy[a_indices])]
                         
                         job = self.jobs[j]
 
@@ -245,9 +245,6 @@ class MDP(object):
                     unit.c_idle = completion + 1            # set when unit will be idle again
                 else:
                     resource.last_action = None
-
-        if (PHASE == "load") and (METHOD == "JEPS"):
-            ws.resources = update_history(ws.resources, z)
 
         return self, False
 

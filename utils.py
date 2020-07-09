@@ -5,9 +5,6 @@ import _pickle as cpickle
 import matplotlib.pyplot as plt
 import os
 from matplotlib.lines import Line2D
-from numpy import asarray
-from numpy import savetxt
-from numpy import loadtxt
 from numpy import save
 from numpy import load
 from time import gmtime, strftime
@@ -51,9 +48,9 @@ def plot_schedule(OUTPUT_DIR, schedule, N, M, LV, GV):
     plt.close(fig)
 
 # Store statistics of some test iteration to log file
-def write_log(OUTPUT_DIR, PHASE, N, M, LV, GV, CONFIG, GAMMA, GAMMA_DECREASE, EPSILON, EPSILON_DECREASE, layer_dims, weight_decay, METHOD, EPOCHS, OBJ_FUN, makespan, Tsum, Tmax, Tn, calc_time, epoch, MILP_objval, MILP_calctime, MILP_TIMEOUT):
+def write_log(OUTPUT_DIR, PHASE, N, M, LV, GV, CONFIG, GAMMA, GAMMA_DECREASE, EPSILON, EPSILON_DECREASE, layer_dims, weight_decay, METHOD, EPOCHS, OBJ_FUN, makespan, Tsum, Tmax, Tn, calc_time, epoch, MILP_objval, MILP_calctime, MILP_TIMEOUT, MCTS_calctime, MCTS_objval):
     file = open(OUTPUT_DIR+"log.csv",'a')
-    file.write("\n"+METHOD+"\t"+PHASE+"\t"+str(N)+"\t"+str(M)+"\t"+str(LV[0])+"\t"+str(GV[0])+"\t"+CONFIG+"\t"+str(EPOCHS)+"\t"+str(GAMMA)+"\t"+str(GAMMA_DECREASE)+"\t"+str(round(EPSILON,2))+"\t"+str(EPSILON_DECREASE)+"\t"+str(layer_dims)+"\t"+str(weight_decay)+"\t"+str(OBJ_FUN["Cmax"])+"\t"+str(OBJ_FUN["Tsum"])+"\t"+str(makespan)+"\t"+str(Tsum)+"\t"+str(Tmax)+"\t"+str(Tn)+"\t"+str(calc_time)+"\t"+str(epoch)+"\t"+str(MILP_objval)+"\t"+str(MILP_calctime)+"\t"+str(MILP_TIMEOUT))
+    file.write("\n"+METHOD+"\t"+PHASE+"\t"+str(N)+"\t"+str(M)+"\t"+str(LV[0])+"\t"+str(GV[0])+"\t"+CONFIG+"\t"+str(EPOCHS)+"\t"+str(GAMMA)+"\t"+str(GAMMA_DECREASE)+"\t"+str(round(EPSILON,2))+"\t"+str(EPSILON_DECREASE)+"\t"+str(layer_dims)+"\t"+str(weight_decay)+"\t"+str(OBJ_FUN["Cmax"])+"\t"+str(OBJ_FUN["Tsum"])+"\t"+str(makespan)+"\t"+str(Tsum)+"\t"+str(Tmax)+"\t"+str(Tn)+"\t"+str(calc_time)+"\t"+str(epoch)+"\t"+str(MILP_objval)+"\t"+str(MILP_calctime)+"\t"+str(MILP_TIMEOUT)+"\t"+str(MCTS_calctime)+"\t"+str(MCTS_objval))
     file.close()
 
 # Store statistics of some test iteration to log file
