@@ -4,10 +4,28 @@ import itertools
 import math
 import copy
 import numpy as np
+from itertools import chain, combinations
 from sklearn.model_selection import train_test_split
 from NN import *
 
-def find_shapley_values(OUTPUT_DIR, X_test, y_test, NN_weights, NN_biases, NN_weights_gradients, NN_biases_gradients, zero_weights):
+def number_of_coalitions(S, cutoff):
+	l = 1
+	nc = len(S)
+	ncs = []
+	while nc < cutoff:
+		ncs.append(True)
+		l += 1
+		nc = len(list(itertools.combinations(S, l)))
+		
+	ncs = ncs + ([False] * (len(S)-((l-1)*2)-1))
+
+	for l in range(len(S)-(l-1),len(S)+1):
+		ncs.append(True)
+
+	return ncs
+
+
+def find_shapley_values(OUTPUT_DIR, X_test, y_test, NN_weights, NN_biases, NN_weights_gradients, NN_biases_gradients, zero_weights, nc_cutoff):
 	# N = set of all features
 	# n = total number of features
 	# i = a particular feature
@@ -21,79 +39,84 @@ def find_shapley_values(OUTPUT_DIR, X_test, y_test, NN_weights, NN_biases, NN_we
 	shapley_values = dict()
 	diff_values = dict()
 
+	N = list(range(n_features))
+	ncs = number_of_coalitions(N[1:], nc_cutoff)
+
 	# Select feature i from all features
 	for i in range(n_features):
-		print("i: "+str(i))
+		# print("i: "+str(i))
 
-		N = list(range(n_features))
-		n = len(N)
 		S = N.copy()
 		S.remove(i)
+		S = np.array(S)
 
 		shapley_i = 0
 		diff_i = 0
-		# Loop over all possible feature coalitions not including i
-		for l in range(1,len(S)+1):
-			print("coalition length: "+str(l)+"/"+str(len(S)+1))
-			for s in itertools.combinations(S, l):
-				s = list(s)
 
-				# Sample 1000 random elements from X_test
-				X = X_test[np.random.choice(X_test.shape[0], 1000, replace=False), :]
+		# Sample coalitions
+		coalitions = []
+		for l in range(len(S)):
+			if ncs[l]:
+				comb = list(itertools.combinations(S, l+1))
+				coalitions += [np.array(c) for c in comb]
+			else:
+				for c in range(nc_cutoff):
+					coalitions.append(S[np.random.choice(S.shape[0], (l+1), replace=False)])
 
-				# Initialize a neural network with value 0 for all weights of the first layer
-				NN = NeuralNetwork(
-					Dense(zero_weights.copy(), zero_weights.copy(), NN_biases[0], NN_biases_gradients[0]), 
-					Sigmoid(),
-					Dense(NN_weights[1], NN_weights_gradients[1], NN_biases[1], NN_biases_gradients[1]), 
-					Sigmoid(),
-					Dense(NN_weights[2], NN_weights_gradients[2], NN_biases[2], NN_biases_gradients[2]),
-					Sigmoid(),
-					Dense(NN_weights[3], NN_weights_gradients[3], NN_biases[3], NN_biases_gradients[3]), 
-					Sigmoid())
-				loss = NLL()
-				
-				# Fill trained weights for features in coalition
-				for si in s:
-					NN.layers[0].W[si] = NN_weights[0][si]
-					NN.layers[0].grad_W[si] = NN_weights_gradients[0][si]
+		for s in coalitions:
 
-				# print(NN.layers[0].W)
+			# Sample 10 random elements from X_test to use for this coalition
+			X = X_test[np.random.choice(X_test.shape[0], 10, replace=False), :]
 
-				# Make predictions with coalition
-				y_pred_0 = []
-				for x in X:
-					y_pred_0.append(NN.forward(x))
+			# Initialize a neural network with value 0 for all weights of the first layer
+			NN = NeuralNetwork(
+				Dense(zero_weights.copy(), zero_weights.copy(), NN_biases[0], NN_biases_gradients[0]), 
+				Sigmoid(),
+				Dense(NN_weights[1], NN_weights_gradients[1], NN_biases[1], NN_biases_gradients[1]), 
+				Sigmoid(),
+				Dense(NN_weights[2], NN_weights_gradients[2], NN_biases[2], NN_biases_gradients[2]),
+				Sigmoid(),
+				Dense(NN_weights[3], NN_weights_gradients[3], NN_biases[3], NN_biases_gradients[3]), 
+				Sigmoid())
+			loss = NLL()
+			
+			# Fill trained weights for features in coalition
+			for si in s:
+				NN.layers[0].W[si] = NN_weights[0][si]
+				NN.layers[0].grad_W[si] = NN_weights_gradients[0][si]
 
-				# Add weights for feature i
-				NN.layers[0].W[i] = NN_weights[0][i]
-				NN.layers[0].grad_W[i] = NN_weights_gradients[0][i]
+			# Make predictions with coalition
+			y_pred_0 = []
+			for x in X:
+				y_pred_0.append(NN.forward(x))
 
-				# print(NN.layers[0].W)
+			# Add weights for feature i
+			NN.layers[0].W[i] = NN_weights[0][i]
+			NN.layers[0].grad_W[i] = NN_weights_gradients[0][i]
 
-				# Make predictions with coalition + i
-				y_pred_1 = []
-				for x in X:
-					y_pred_1.append(NN.forward(x))
+			# Make predictions with coalition + i
+			y_pred_1 = []
+			for x in X:
+				y_pred_1.append(NN.forward(x))
 
-				# IDEA: not only use difference between predictions ex- and including feature i, but also 
-				# comparing both results to y_true, and make shapley value illustrate to what extent
-				# the value moves either toward or away from correct value (instead of higher/lower)
+			# IDEA: not only use difference between predictions ex- and including feature i, but also 
+			# comparing both results to y_true, and make shapley value illustrate to what extent
+			# the value moves either toward or away from correct value (instead of higher/lower)
 
-				diff = np.average([y1 - y0 for (y1, y0) in zip(y_pred_1, y_pred_0)])
-				diff_i += diff
-				shapley_s = ((math.factorial(len(s)) * math.factorial(n - len(s) - 1)) / math.factorial(n)) * diff
-				shapley_i += shapley_s
+			diff = np.average([y1 - y0 for (y1, y0) in zip(y_pred_1, y_pred_0)])
+			diff_i += diff
+			shapley_s = ((math.factorial(len(s)) * math.factorial(len(N) - len(s) - 1)) / math.factorial(len(N))) * diff
+			shapley_i += shapley_s
 
-				print("shapley of coalition "+str(s)+": "+str(round(shapley_s,6))+" (diff: "+str(round(diff,6))+")")
+			# print("i="+str(i)+": "+str(shapley_i)+", coalition of "+str(len(s)))
+ 
+		diff_file = open(OUTPUT_DIR+"batch/diff_values.txt",'a')
+		diff_file.write("i="+str(i)+": "+str(np.array(diff_i))+"\n")
+		diff_file.close()
 
-			diff_file = open(OUTPUT_DIR+"batch/diff_values.txt",'a')
-			diff_file.write("i="+str(i)+", l="+str(l)+": "+str(np.array(diff_i))+"\n")
-			diff_file.close()
-
-			shapley_file = open(OUTPUT_DIR+"batch/shapley_values.txt",'a')
-			shapley_file.write("i="+str(i)+", l="+str(l)+": "+str(np.array(shapley_i))+"\n")
-			shapley_file.close()
+		shapley_file = open(OUTPUT_DIR+"batch/shapley_values.txt",'a')
+		shapley_file.write("i="+str(i)+": "+str(np.array(shapley_i))+"\n")
+		shapley_file.close()
 
 		diff_values[i] = diff_i
 		shapley_values[i] = shapley_i
@@ -116,6 +139,7 @@ def main():
 	# SETTINGS
 	layer_dims = [32, 25, 16, 7, 1]
 	OUTPUT_DIR = '/home/merel/Documents/studie/IS/thesis/output/'
+	nc_cutoff = 500
 
 	with open(OUTPUT_DIR+"batch/"+str(layer_dims)+'-weights.pickle','rb') as f:
 	    NN_weights = pickle.load(f)
@@ -147,7 +171,7 @@ def main():
 	X_test = np.load(OUTPUT_DIR+"batch/X_test.npy")
 	y_test = np.load(OUTPUT_DIR+"batch/y_test.npy")
 
-	find_shapley_values(OUTPUT_DIR, X_test, y_test, NN_weights, NN_biases, NN_weights_gradients, NN_biases_gradients, zero_weights)
+	find_shapley_values(OUTPUT_DIR, X_test, y_test, NN_weights, NN_biases, NN_weights_gradients, NN_biases_gradients, zero_weights, nc_cutoff)
 
 
 if __name__ == '__main__':
