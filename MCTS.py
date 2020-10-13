@@ -31,7 +31,7 @@ class Monte_Carlo(object):
 
         for b in range(budget):
 
-            print(self.root.objval)
+            # print(self.root.objval)
 
             # if current node is a leaf (complete schedule) start backpropagating
             if self.node.isleaf == True:
@@ -51,6 +51,9 @@ class Monte_Carlo(object):
                 if len(self.node.children) == 0:
                     job = random.sample(self.node.waiting, 1)[0]
                     resource = random.sample(self.resources, 1)[0]
+
+                    # print(job.j)
+                    # print(resource.i)
                     
 		        	# extend schedule
                     schedule = copy.deepcopy(self.node.schedule.schedule)

@@ -6,6 +6,7 @@ import numpy as np
 import instance_functions
 import solve_techniques as st
 import schedule_tools
+import random
 from plotting_functions import plot_best_schedule
 
 def MILP_instance(M, LV, GV, N):
@@ -16,14 +17,13 @@ def MILP_instance(M, LV, GV, N):
 	               'probsBatch': [1 for i in range(M)]}
 	n = N
 	lR = np.zeros((plantLayout['q'], n))
-	ins = instance_functions.Instance(n=n, randomSeed=2, lR=lR, **plantLayout)
+	ins = instance_functions.Instance(n=n, randomSeed=random.randrange(0,2000), lR=lR, **plantLayout)
 
 	return ins
 
 
-def MILP_solve(M, LV, GV, N):
-	ins = MILP_instance(M, LV, GV, N)
-	model, decVars = st.solve_MILP(ins, startSol=None, saveModel=True)	# HIERHEEN
+def MILP_solve(ins, M, LV, GV, N):
+	model, decVars = st.solve_MILP(ins, startSol=None, saveModel=True)
 	# modelTight, decVarsTight = plot_best_schedule(ins, model, decVars, tightStartTimes=True)
 	schedule = schedule_tools.Schedule(ins, decVars)
 	objVal = model.objVal

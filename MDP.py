@@ -115,6 +115,8 @@ class MDP(object):
             Dense(NN_weights[1], NN_weights_gradients[1], NN_biases[1], NN_biases_gradients[1]), 
             Sigmoid(),
             Dense(NN_weights[2], NN_weights_gradients[2], NN_biases[2], NN_biases_gradients[2]),
+            Sigmoid(),
+            Dense(NN_weights[3], NN_weights_gradients[3], NN_biases[3], NN_biases_gradients[3]), 
             Sigmoid())
         self.loss = NLL()
         
@@ -190,13 +192,10 @@ class MDP(object):
                 resource = ws.resources[unit.i]
                 
                 if unit.processing == None and len(unit.state) > 0:
-                    # waiting = unit.state.copy()
-                    
+
                     # choose random action with probability EPSILON,
                     # otherwise choose action with highest policy value
                     if random.uniform(0, 1) < EPSILON:
-                        # actions = waiting.copy()
-                        # actions.append("do_nothing")
                         job = random.sample(unit.state, 1)[0]
                     else:
                         a_indices = [job.j for job in unit.state]
@@ -207,25 +206,19 @@ class MDP(object):
                             for j in a_indices:
                                 inputs = generate_NN_input(N, M, LV, GV, CONFIG, ws, resource, self.jobs, ws.v, resource.i, j, z, heur_job, heur_res, heur_blocking, heur_rev_blocking, deltas)
                                 values.append(self.NN.forward(inputs))
-                            # inputs = generate_NN_input(N, M, LV, GV, ws, resource, self.jobs, ws.v, 0, N, z, heur_job, heur_res, heur_blocking, heur_rev_blocking, deltas)
-                            # values.append(self.NN.forward(inputs))
 
-                            j = a_indices[np.argmax(values)]
+                            j = a_indices[np.argmin(values)]
 
                         # elif (PHASE == "load") and (METHOD == "JEPS"):
                         #     j = a_indices[np.argmax(resource.policy[a_indices])]
                         
                         job = self.jobs[j]
 
-                    # if job == "do_nothing":
-                    #     inputs = generate_NN_input(N, M, LV, GV, ws, resource, self.jobs, ws.v, 0, N, z, heur_job, heur_res, heur_blocking, heur_rev_blocking, deltas)
-                    # else:
                     inputs = generate_NN_input(N, M, LV, GV, CONFIG, ws, resource, self.jobs, ws.v, resource.i, job.j, z, heur_job, heur_res, heur_blocking, heur_rev_blocking, deltas)
                     self.NN_inputs.append(inputs)
                     self.NN_predictions.append(self.NN.forward(inputs))
 
                     resource.last_action = job                  # update last executed action
-                    # if job != "do_nothing":
                     resource.last_job = job                 # update last processed job
 
                     for u in first_units:

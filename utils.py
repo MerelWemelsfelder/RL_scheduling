@@ -54,15 +54,27 @@ def write_log(OUTPUT_DIR, PHASE, N, M, LV, GV, CONFIG, GAMMA, GAMMA_DECREASE, EP
     file.close()
 
 # Store statistics of some test iteration to log file
-def write_training_batch(OUTPUT_DIR, X_train, y_pred, r, MILP_objval):    
-    score = (MILP_objval-r)
-    if min(MILP_objval, r) > 0:
-        score /= min(MILP_objval, r)
-    y_true = y_pred + (score * y_pred)
+def write_training_batch(OUTPUT_DIR, X_train, y_true):    
+    # score = (MILP_objval-r)
+    # if min(MILP_objval, r) > 0:
+    #     score /= min(MILP_objval, r)
+    # else:
+    #     print('Alert: The objective value of either the MILP or RL algorithm was 0.')
+    # y_true = y_pred + (score * y_pred)
 
-    save(OUTPUT_DIR+"X_train/"+str(strftime("%d-%H:%M:%S", gmtime()))+".npy", X_train)
-    save(OUTPUT_DIR+"y_pred/"+str(strftime("%d-%H:%M:%S", gmtime()))+".npy", y_pred)
-    save(OUTPUT_DIR+"y_true/"+str(strftime("%d-%H:%M:%S", gmtime()))+".npy", y_true)
+    # save(OUTPUT_DIR+"X_train/"+str(strftime("%m-%d-%H:%M:%S", gmtime()))+".npy", X_train)
+    # save(OUTPUT_DIR+"y_pred/"+str(strftime("%m-%d-%H:%M:%S", gmtime()))+".npy", y_pred)
+    # save(OUTPUT_DIR+"y_true/"+str(strftime("%m-%d-%H:%M:%S", gmtime()))+".npy", y_true)
+
+    file_X = open(OUTPUT_DIR+"batch/X.txt",'a')
+    file_y = open(OUTPUT_DIR+"batch/y.txt",'a')
+
+    for i in range(len(X_train)):
+        file_X.write(";".join([str(x) for x in X_train[i]])+"\n")
+        file_y.write(str(y_true[i][0])+"\n")
+
+    file_X.close()
+    file_y.close()
 
 # Store the trained weights of the Neural Network, used as a policy value function
 def write_NN_weights(OUTPUT_DIR, M, N, LV, GV, EPSILON, layer_dims, OBJ_FUN, NN_weights, NN_biases, NN_weights_gradients, NN_biases_gradients, GAMMA, GAMMA_DECREASE):

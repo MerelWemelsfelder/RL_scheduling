@@ -35,13 +35,12 @@ class Dense(Layer):
         self.grad_b = grad_b
 
     def forward(self, x_input):
-
         self.output = np.dot(x_input, self.W) + self.b
         return self.output
     
     def backward(self, x_input, grad_output):
         # get gradients of weights
-        self.grad_W = np.dot(np.array(x_input).reshape(self.W.shape[0], 1), np.array(grad_output).reshape(1,len(grad_output)))
+        self.grad_W = np.dot(np.array([x_input]).reshape(self.W.shape[0], 1), np.array([grad_output]).reshape(1,len(grad_output)))
         self.grad_b = np.dot(np.ones(len(grad_output)), grad_output)
         # propagate the gradient backwards
         return np.dot(grad_output, np.transpose(self.W))
@@ -123,19 +122,23 @@ class NeuralNetwork(object):
 class NLL(object):
 
     def nll_forward(self, target_pred, target_true):
-        target_pred += 0.00001
-        target_true += 0.00001
-        target_pred *= 0.99999
-        target_true *= 0.99999
+        # target_pred += 0.00001
+        # target_true += 0.00001
+        # target_pred *= 0.99999
+        # target_true *= 0.99999
 
         part1 = np.dot(np.transpose(target_true),np.log(target_pred))
         part2 = np.dot(np.transpose(1 - target_true), np.log(1 - target_pred))
 
+
         whole = part1 + part2
         N = len(target_pred)
-        output = -((1*whole)/N)
+        output = np.array([-((1*whole)/N)])
 
-        return output[0][0]
+        if type(output[0]) == type(np.array([[1,2],[3,4]])):
+            return output[0][0]
+        else:
+            return output[0]
 
     def nll_grad_input(self, target_pred, target_true):
         numerator = target_pred - target_true
@@ -173,30 +176,36 @@ class SGD(object):
             np.subtract(w, update, out=w)
 
 # model = RL.NN, X_train = RL.NN_inputs
-def update_NN(model, X_train, y_pred, weight_decay, GAMMA, loss, r, r_best, MILP_objval):
-    
-    # LOADING
-    # score = (r_best-r)
-    # if min(r_best, r) > 0:
-    #     score /= min(r_best, r)
-
-    # TRAINING
-    score = (MILP_objval-r)
-    if min(MILP_objval, r) > 0:
-        score /= min(MILP_objval, r)
-
-    y_true = y_pred + (score * y_pred)
+def update_NN(model, X_train, y_pred, y_true, weight_decay, GAMMA, loss):
 
     loss_value = loss.forward(y_pred, y_true)  #+ l2_regularizer(weight_decay, model.get_params())
     loss_grad = loss.backward(y_pred, y_true)
 
-    for i in range(len(X_train)):
-        model.backward(X_train[i], loss_grad[i])
+    if len(X_train.shape) == 1:
+        model.backward(X_train, loss_grad)
+    elif len(X_train.shape) == 2:
+        for i in range(len(X_train)):
+            model.backward(X_train[i], loss_grad[i])
 
     sgd = SGD(model, gamma=GAMMA, weight_decay=weight_decay)
     sgd.update_params()
     return sgd.model
 
+
+def batch_train_NN(NN, loss, OUTPUT_DIR, weight_decay, GAMMA):
+
+    X_train = np.load(OUTPUT_DIR+"batch/X_train.npy")
+    y_train = np.load(OUTPUT_DIR+"batch/y_train.npy")
+
+    order = [*range(0,(len(X_train)-1),1)]
+    random.shuffle(order)
+
+    for i in order:
+        y_pred = NN.forward(X_train[i])
+        print(str(i) + ": " + str(y_pred) + ", " + str(y_train[i]))
+        NN = update_NN(model=NN, X_train=np.array(X_train[i]), y_pred=np.array(y_pred), y_true=np.array([y_train[i]]), weight_decay=weight_decay, GAMMA=GAMMA, loss=loss)
+
+    return NN
 
 
 # Generate the input vector for value prediction by the Neural Network
@@ -414,13 +423,17 @@ def generate_NN_input(N, M, LV, GV, CONFIG, ws, resource, jobs, v, i, j, z, heur
     if np.std(duedates_coming) > 0:
         relative_duedate = (duedate - np.mean(duedates_coming)) / np.std(duedates_coming)
 
+    n = N
+    m = M
+    lv = np.average(LV)
+    gv = np.sum(GV)
 
     all_vars = [
         time_res_minmax, time_res_stdev, time_res_stdev_occupied, time_res_stdev_blocking, time_res_stdev_occ_block, 
         time_job_minmax, time_job_minmax_coming, time_job_stdev_all, time_job_stdev_coming, time_job_stdev_blocking_all, time_job_stdev_blocking_coming, 
         blocking_res_stdev, rev_blocking_res_stdev, blocking_job_all_stdev, rev_blocking_job_all_stdev, blocking_job_coming_stdev, rev_blocking_job_coming_stdev, blocking, rev_blocking, 
         u0_occupied, future_blockings_mean, future_rev_blockings_mean, future_blockings_median, future_rev_blockings_median, 
-        already_processing, T_expected, time_to_duedate, relative_duedate]
+        already_processing, T_expected, time_to_duedate, relative_duedate, n, m, lv, gv]
 
     XV = [
         time_res_minmax, time_res_stdev, time_res_stdev_occ_block, time_job_minmax, time_job_stdev_coming, time_job_stdev_blocking_coming, 
