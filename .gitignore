@@ -1,4 +1,5 @@
 *.pyc
 *.lp
+*.ipynb
 
 /output/

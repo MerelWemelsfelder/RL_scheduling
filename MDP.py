@@ -115,8 +115,6 @@ class MDP(object):
             Dense(NN_weights[1], NN_weights_gradients[1], NN_biases[1], NN_biases_gradients[1]), 
             Sigmoid(),
             Dense(NN_weights[2], NN_weights_gradients[2], NN_biases[2], NN_biases_gradients[2]),
-            Sigmoid(),
-            Dense(NN_weights[3], NN_weights_gradients[3], NN_biases[3], NN_biases_gradients[3]), 
             Sigmoid())
         self.loss = NLL()
         

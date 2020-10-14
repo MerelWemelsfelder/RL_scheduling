@@ -454,6 +454,11 @@ def generate_NN_input(N, M, LV, GV, CONFIG, ws, resource, jobs, v, i, j, z, heur
         blocking_res_stdev, rev_blocking_res_stdev, blocking_job_all_stdev, rev_blocking_job_all_stdev, blocking_job_coming_stdev, rev_blocking_job_coming_stdev, relative_duedate]
     generalizability_T = [time_res_minmax, time_job_stdev_coming, time_job_stdev_blocking_coming, blocking_job_coming_stdev, rev_blocking_job_coming_stdev, relative_duedate, T_expected]
 
-    configs = [all_vars, XV, minmax_large, minmax_small, generalizability, high, absolute, relative, generalizability_T]
+    diff_better = [u0_occupied, future_blockings_mean, future_rev_blockings_mean, future_blockings_median, T_expected, lv, gv]
+    better = [time_res_minmax, time_job_minmax, time_job_minmax_coming, time_job_stdev_blocking_coming, blocking_job_all_stdev, rev_blocking_job_all_stdev, rev_blocking_job_coming_stdev, u0_occupied, 
+        future_blockings_mean, future_rev_blockings_mean, future_blockings_median, future_rev_blockings_median, T_expected, time_to_duedate, m, lv, gv]
+    diff = [blocking, u0_occupied, future_blockings_mean, future_rev_blockings_mean, future_blockings_median, future_rev_blockings_median, T_expected, n, lv, gv]
 
+
+    configs = [all_vars, XV, minmax_large, minmax_small, generalizability, high, absolute, relative, generalizability_T, diff, better, diff_better]
     return configs[CONFIG]
