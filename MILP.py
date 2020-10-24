@@ -9,7 +9,7 @@ import schedule_tools
 import random
 from plotting_functions import plot_best_schedule
 
-def MILP_instance(M, LV, GV, N):
+def MILP_instance(M, LV, GV, N, RSEED):
 	plantLayout = {'q': M,
 	               'lm': LV,
 	               'lU': GV,
@@ -17,7 +17,7 @@ def MILP_instance(M, LV, GV, N):
 	               'probsBatch': [1 for i in range(M)]}
 	n = N
 	lR = np.zeros((plantLayout['q'], n))
-	ins = instance_functions.Instance(n=n, randomSeed=random.randrange(0,2000), lR=lR, **plantLayout)
+	ins = instance_functions.Instance(n=n, randomSeed=RSEED, lR=lR, **plantLayout) # random.randrange(0,2000)
 
 	return ins
 

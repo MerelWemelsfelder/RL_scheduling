@@ -192,10 +192,11 @@ def update_NN(model, X_train, y_pred, y_true, weight_decay, GAMMA, loss):
     return sgd.model
 
 
-def batch_train_NN(NN, loss, OUTPUT_DIR, weight_decay, GAMMA):
+def batch_train_NN(NN, loss, OUTPUT_DIR, weight_decay, GAMMA, INPUT_CONFIGS, CONFIG):
 
-    X_train = np.load(OUTPUT_DIR+"batch/X_train.npy")
-    y_train = np.load(OUTPUT_DIR+"batch/y_train.npy")
+    folder = INPUT_CONFIGS[CONFIG] + "/"
+    X_train = np.load(OUTPUT_DIR+"batch/"+folder+"X_train.npy")
+    y_train = np.load(OUTPUT_DIR+"batch/"+folder+"y_train.npy")
 
     order = [*range(0,(len(X_train)-1),1)]
     random.shuffle(order)
@@ -245,10 +246,14 @@ def generate_NN_input(N, M, LV, GV, CONFIG, ws, resource, jobs, v, i, j, z, heur
     
     # on a scale from min to max processing time of j on all resources
     times_res = list(heur_res[j][v].values())
-    time_res_minmax = (processing_time - min(times_res)) / (max(times_res) - min(times_res))
+    time_res_minmax = processing_time - min(times_res)
 
     # measuring how many standard deviations it is from the mean
-    time_res_stdev = (processing_time - np.mean(times_res)) / np.std(times_res)
+    time_res_stdev = processing_time - np.mean(times_res)
+
+    if max(times_res) != min(times_res):
+        time_res_minmax /= (max(times_res) - min(times_res))
+        time_res_stdev /= np.std(times_res)
 
     # measuring how many standard deviations it is from the mean
     # taking the time into account that other resources will still be unavailable
@@ -435,17 +440,15 @@ def generate_NN_input(N, M, LV, GV, CONFIG, ws, resource, jobs, v, i, j, z, heur
         u0_occupied, future_blockings_mean, future_rev_blockings_mean, future_blockings_median, future_rev_blockings_median, 
         already_processing, T_expected, time_to_duedate, relative_duedate, n, m, lv, gv]
 
-    XV = [
+    sim_select = [
         time_res_minmax, time_res_stdev, time_res_stdev_occ_block, time_job_minmax, time_job_stdev_coming, time_job_stdev_blocking_coming, 
         blocking_res_stdev, rev_blocking_res_stdev, blocking_job_coming_stdev, rev_blocking_job_coming_stdev, blocking, rev_blocking, u0_occupied, future_blockings_median, future_rev_blockings_median, 
         already_processing, T_expected, time_to_duedate, relative_duedate]
 
-    minmax_large = [
+    minmax = [
         time_res_stdev, time_job_minmax, time_job_stdev_coming, blocking_res_stdev, rev_blocking_res_stdev, blocking, rev_blocking, u0_occupied, 
         future_blockings_median, future_rev_blockings_median, T_expected, time_to_duedate]
-    minmax_small = [blocking, rev_blocking, u0_occupied, future_blockings_mean, future_rev_blockings_mean, future_blockings_median, future_rev_blockings_median, T_expected]
     generalizability = [time_res_minmax, time_job_stdev_coming, time_job_stdev_blocking_coming, blocking_job_coming_stdev, rev_blocking_job_coming_stdev, relative_duedate]
-    high = [T_expected]
     absolute = [
         time_res_minmax, time_job_minmax, time_job_minmax_coming, blocking, rev_blocking, u0_occupied, 
         future_blockings_median, future_rev_blockings_median, already_processing, T_expected, time_to_duedate]
@@ -454,11 +457,11 @@ def generate_NN_input(N, M, LV, GV, CONFIG, ws, resource, jobs, v, i, j, z, heur
         blocking_res_stdev, rev_blocking_res_stdev, blocking_job_all_stdev, rev_blocking_job_all_stdev, blocking_job_coming_stdev, rev_blocking_job_coming_stdev, relative_duedate]
     generalizability_T = [time_res_minmax, time_job_stdev_coming, time_job_stdev_blocking_coming, blocking_job_coming_stdev, rev_blocking_job_coming_stdev, relative_duedate, T_expected]
 
-    diff_better = [u0_occupied, future_blockings_mean, future_rev_blockings_mean, future_blockings_median, T_expected, lv, gv]
-    better = [time_res_minmax, time_job_minmax, time_job_minmax_coming, time_job_stdev_blocking_coming, blocking_job_all_stdev, rev_blocking_job_all_stdev, rev_blocking_job_coming_stdev, u0_occupied, 
-        future_blockings_mean, future_rev_blockings_mean, future_blockings_median, future_rev_blockings_median, T_expected, time_to_duedate, m, lv, gv]
-    diff = [blocking, u0_occupied, future_blockings_mean, future_rev_blockings_mean, future_blockings_median, future_rev_blockings_median, T_expected, n, lv, gv]
+    diff = [time_res_stdev_occupied, time_res_stdev_blocking, time_res_stdev_occ_block, blocking_res_stdev, rev_blocking_res_stdev, blocking, rev_blocking, u0_occupied, future_blockings_mean, 
+        future_rev_blockings_mean, future_blockings_median, future_rev_blockings_median, T_expected, time_to_duedate, n, m, lv, gv]
+    better = [time_res_stdev, time_res_stdev_occupied, time_res_stdev_blocking, time_res_stdev_occ_block, time_job_stdev_all, time_job_stdev_coming, time_job_stdev_blocking_coming, 
+        blocking_res_stdev, rev_blocking_res_stdev, T_expected]
+    diff_better = [time_res_stdev_occupied, time_res_stdev_blocking, time_res_stdev_occ_block, blocking_res_stdev, rev_blocking_res_stdev, T_expected]
 
-
-    configs = [all_vars, XV, minmax_large, minmax_small, generalizability, high, absolute, relative, generalizability_T, diff, better, diff_better]
+    configs = [all_vars, sim_select, minmax, generalizability, absolute, relative, diff, better, diff_better]
     return configs[CONFIG]

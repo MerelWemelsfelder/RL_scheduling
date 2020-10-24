@@ -12,7 +12,7 @@ from time import gmtime, strftime
 from NN import *
 
 # Make a pretty plot of the found schedule and save it as a png
-def plot_schedule(OUTPUT_DIR, schedule, N, M, LV, GV):
+def plot_schedule(OUTPUT_DIR, config_name, schedule, N, M, LV, GV, EPSILON, TIMEOUT):
     lv = max(LV)
     gv = max(GV)
 
@@ -44,48 +44,76 @@ def plot_schedule(OUTPUT_DIR, schedule, N, M, LV, GV):
                     gnt.broken_barh([(start, duration)], (y_position, 9), facecolors = color)
 
     gnt.legend(legend_colors, legend_names)
-    plt.savefig(OUTPUT_DIR+"schedules/"+str(M)+"-"+str(N)+"-"+str(LV)+"-"+str(GV)+".png")
+    plt.savefig(OUTPUT_DIR+"schedules/"+config_name+"/E"+str(EPSILON)+"/"+str(TIMEOUT)+"_"+str(N)+"-"+str(LV[0])+".png")
     plt.close(fig)
 
 # Store statistics of some test iteration to log file
-def write_log(OUTPUT_DIR, PHASE, N, M, LV, GV, CONFIG, GAMMA, GAMMA_DECREASE, EPSILON, EPSILON_DECREASE, layer_dims, weight_decay, METHOD, EPOCHS, OBJ_FUN, makespan, Tsum, Tmax, Tn, calc_time, epoch, MILP_objval, MILP_calctime, MILP_TIMEOUT, MCTS_calctime, MCTS_objval):
-    file = open(OUTPUT_DIR+"log.csv",'a')
-    file.write("\n"+METHOD+"\t"+PHASE+"\t"+str(N)+"\t"+str(M)+"\t"+str(LV[0])+"\t"+str(GV[0])+"\t"+CONFIG+"\t"+str(EPOCHS)+"\t"+str(GAMMA)+"\t"+str(GAMMA_DECREASE)+"\t"+str(round(EPSILON,2))+"\t"+str(EPSILON_DECREASE)+"\t"+str(layer_dims)+"\t"+str(weight_decay)+"\t"+str(OBJ_FUN["Cmax"])+"\t"+str(OBJ_FUN["Tsum"])+"\t"+str(makespan)+"\t"+str(Tsum)+"\t"+str(Tmax)+"\t"+str(Tn)+"\t"+str(calc_time)+"\t"+str(epoch)+"\t"+str(MILP_objval)+"\t"+str(MILP_calctime)+"\t"+str(MILP_TIMEOUT)+"\t"+str(MCTS_calctime)+"\t"+str(MCTS_objval))
+def write_log(OUTPUT_DIR, PHASE, N, M, LV, GV, config_name, GAMMA, EPSILON, EPSILON_DECREASE, layer_dims, weight_decay, METHOD, EPOCHS, OBJ_FUN, makespan, Tsum, Tmax, Tn, calc_time, epoch, MILP_objval, MILP_calctime, MILP_TIMEOUT, MCTS_calctime, MCTS_objval):
+    file = open(OUTPUT_DIR+"batch/"+config_name+"/log.csv",'a')
+    file.write("\n"+METHOD+"\t"+PHASE+"\t"+str(N)+"\t"+str(M)+"\t"+str(LV[0])+"\t"+str(GV[0])+"\t"+config_name+"\t"+str(EPOCHS)+"\t"+str(GAMMA)+"\t"+str(round(EPSILON,2))+"\t"+str(EPSILON_DECREASE)+"\t"+str(layer_dims)+"\t"+str(weight_decay)+"\t"+str(OBJ_FUN["Cmax"])+"\t"+str(OBJ_FUN["Tsum"])+"\t"+str(makespan)+"\t"+str(Tsum)+"\t"+str(Tmax)+"\t"+str(Tn)+"\t"+str(calc_time)+"\t"+str(epoch)+"\t"+str(MILP_objval)+"\t"+str(MILP_calctime)+"\t"+str(MILP_TIMEOUT)+"\t"+str(MCTS_calctime)+"\t"+str(MCTS_objval))
     file.close()
 
 # Store statistics of some test iteration to log file
-def write_training_batch(OUTPUT_DIR, X_train, y_true):    
-    # score = (MILP_objval-r)
-    # if min(MILP_objval, r) > 0:
-    #     score /= min(MILP_objval, r)
-    # else:
-    #     print('Alert: The objective value of either the MILP or RL algorithm was 0.')
-    # y_true = y_pred + (score * y_pred)
+def write_training_batch(OUTPUT_DIR, X_train, y_true, INPUT_CONFIGS, CONFIG):
 
-    # save(OUTPUT_DIR+"X_train/"+str(strftime("%m-%d-%H:%M:%S", gmtime()))+".npy", X_train)
-    # save(OUTPUT_DIR+"y_pred/"+str(strftime("%m-%d-%H:%M:%S", gmtime()))+".npy", y_pred)
-    # save(OUTPUT_DIR+"y_true/"+str(strftime("%m-%d-%H:%M:%S", gmtime()))+".npy", y_true)
-
-    file_X = open(OUTPUT_DIR+"batch/X.txt",'a')
-    file_y = open(OUTPUT_DIR+"batch/y.txt",'a')
+    folder = INPUT_CONFIGS[CONFIG] + "/"
+    file_X = open(OUTPUT_DIR+"batch/"+folder+"X.txt",'a')
+    file_y = open(OUTPUT_DIR+"batch/"+folder+"y.txt",'a')
 
     for i in range(len(X_train)):
         file_X.write(";".join([str(x) for x in X_train[i]])+"\n")
-        file_y.write(str(y_true[i][0])+"\n")
+        file_y.write(str(y_true)+"\n")
 
     file_X.close()
     file_y.close()
 
+    with open(OUTPUT_DIR+"batch/"+folder+"X.txt") as f:
+        X = f.readlines()
+        X = [x.strip().split(";") for x in X]
+        for f in range(0,len(X)):
+            X[f] = [float(x) for x in X[f]]
+    with open(OUTPUT_DIR+"batch/"+folder+"y.txt") as f:
+        y = f.readlines()
+        y = [float(y.strip("\n")) for y in y]
+
+    if (len(X)!=len(y)):
+        print(y)
+        print(X_train)
+        print(y_true)
+        print(len(X), len(y))    
+
 # Store the trained weights of the Neural Network, used as a policy value function
-def write_NN_weights(OUTPUT_DIR, M, N, LV, GV, EPSILON, layer_dims, OBJ_FUN, NN_weights, NN_biases, NN_weights_gradients, NN_biases_gradients, GAMMA, GAMMA_DECREASE):
-    with open(OUTPUT_DIR+"NN_weights/"+str(layer_dims)+"-"+str(N)+"_"+str(LV)+"-weights.pickle",'wb') as f:
+def write_NN_weights(OUTPUT_DIR, layer_dims, NN_weights, NN_biases, NN_weights_gradients, NN_biases_gradients, INPUT_CONFIGS, CONFIG):
+    folder = INPUT_CONFIGS[CONFIG] + "/"
+    with open(OUTPUT_DIR+"batch/"+folder+str(layer_dims)+"-weights.pickle",'wb') as f:
         pickle.dump(NN_weights, f)
-    with open(OUTPUT_DIR+"NN_weights/"+str(layer_dims)+"-"+str(N)+"_"+str(LV)+"-biases.pickle",'wb') as f:
+    with open(OUTPUT_DIR+"batch/"+folder+str(layer_dims)+"-biases.pickle",'wb') as f:
         pickle.dump(NN_biases, f)
-    with open(OUTPUT_DIR+"NN_weights/"+str(layer_dims)+"-"+str(N)+"_"+str(LV)+"-weights_grad.pickle",'wb') as f:
+    with open(OUTPUT_DIR+"batch/"+folder+str(layer_dims)+"-weights_grad.pickle",'wb') as f:
         pickle.dump(NN_weights_gradients, f)
-    with open(OUTPUT_DIR+"NN_weights/"+str(layer_dims)+"-"+str(N)+"_"+str(LV)+"-biases_grad.pickle",'wb') as f:
+    with open(OUTPUT_DIR+"batch/"+folder+str(layer_dims)+"-biases_grad.pickle",'wb') as f:
         pickle.dump(NN_biases_gradients, f)
+
+def find_layer_dims(CONFIG):
+    if CONFIG  == 0:
+        return [32, 25, 16, 7, 1]
+    if CONFIG  == 1:
+        return [19, 13, 6, 1]
+    if CONFIG  == 2:
+        return [12, 8, 4, 1]
+    if CONFIG  == 3:
+        return [6, 4, 2, 1]
+        # return [6, 10, 8, 3, 1]
+    if CONFIG  == 4:
+        return [11, 7, 3, 1]
+    if CONFIG  == 5:
+        return [15, 11, 6, 1]
+    if CONFIG  == 6:
+        return [18, 13, 6, 1]
+    if CONFIG  == 7:
+        return [10, 7, 3, 1]
+    if CONFIG  == 8:
+        return [6, 4, 2, 1]
 
 # Heuristic: for each resource in each work station, the time that each job costs to process
 def heuristic_best_job(deltas, N, M, LV, GV):
