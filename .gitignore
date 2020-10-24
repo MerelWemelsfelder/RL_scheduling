@@ -1,5 +1,6 @@
 *.pyc
 *.lp
 *.ipynb
+*.pdf
 
 /output/
